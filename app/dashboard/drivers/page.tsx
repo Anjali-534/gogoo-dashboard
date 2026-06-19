@@ -296,6 +296,25 @@ export default function DriversPage() {
                 <p className="text-white text-sm font-bold">⭐ {Number(d.rating).toFixed(1)}</p>
                 <p className="text-gray-500 text-xs">{d.total_rides} rides</p>
               </div>
+              <div className="text-center hidden xl:block min-w-[90px]">
+                <p className={`text-sm font-bold ${
+                  d.wallet_balance == null ? "text-gray-500"
+                  : d.wallet_balance >= 500 ? "text-green-400"
+                  : d.wallet_balance >= 0   ? "text-yellow-400"
+                  : "text-red-400"
+                }`}>
+                  ₹{Math.round(d.wallet_balance ?? -700)}
+                </p>
+                <p className={`text-xs mt-0.5 ${
+                  d.is_wallet_blocked ? "text-red-400"
+                  : (d.wallet_balance ?? -700) < 0 ? "text-yellow-500"
+                  : "text-green-500"
+                }`}>
+                  {d.is_wallet_blocked ? "🚫 Blocked"
+                   : (d.wallet_balance ?? -700) < 0 ? "⚠️ Low"
+                   : "✅ Active"}
+                </p>
+              </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button onClick={() => openDriver(d)}
                   className="px-4 py-2 bg-[#FF6B2B]/10 text-[#FF6B2B] border border-[#FF6B2B]/30 rounded-xl text-xs font-medium hover:bg-[#FF6B2B]/20 transition">
