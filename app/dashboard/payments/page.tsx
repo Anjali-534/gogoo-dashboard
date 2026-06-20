@@ -4,7 +4,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { Download, RefreshCw } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import Pagination from "../../../../components/Pagination";
+import Pagination from "../../../components/Pagination";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 const PER_PAGE = 50;
