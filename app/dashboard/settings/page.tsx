@@ -1,31 +1,227 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import axios from "axios";
+import toast from "react-hot-toast";
+import { Save, RefreshCw, Lock, UserPlus } from "lucide-react";
+
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+const DEFAULT_SETTINGS = {
+  commission_percent:      20,
+  surge_multiplier:        1.0,
+  min_wallet_balance:      500,
+  wallet_block_threshold: -1000,
+  registration_fee:        700,
+  cancellation_fee:         30,
+  otp_expiry_seconds:      300,
+};
+
+type Settings = typeof DEFAULT_SETTINGS;
+
+function SettingRow({ label, description, name, value, onChange, unit = "", type = "number" }: any) {
+  return (
+    <div className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0">
+      <div className="flex-1 min-w-0 mr-8">
+        <p className="text-sm font-semibold text-gray-900">{label}</p>
+        {description && <p className="text-xs text-gray-400 mt-0.5">{description}</p>}
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {unit && <span className="text-sm text-gray-400">{unit}</span>}
+        <input
+          type={type}
+          value={value}
+          onChange={e => onChange(name, type === "number" ? Number(e.target.value) : e.target.value)}
+          className="w-28 px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-400 transition text-right font-semibold text-gray-900"
+        />
+      </div>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
-  const [surge, setSurge] = useState("1.0");
-  const [commission, setCommission] = useState("20");
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [saving,   setSaving]   = useState(false);
+  const [loading,  setLoading]  = useState(true);
+  const [pwModal,  setPwModal]  = useState(false);
+  const [newPw,    setNewPw]    = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+
+  const token = () => typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
+
+  useEffect(() => {
+    // Try to load settings from backend, fall back to localStorage
+    const saved = localStorage.getItem("gogoo_settings");
+    if (saved) { try { setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(saved) }); } catch {} }
+    axios.get(`${API}/gogoo/admin/settings`, {
+      headers: { Authorization: `Bearer ${token()}` },
+    }).then(r => {
+      if (r.data && typeof r.data === "object") {
+        setSettings(prev => ({ ...prev, ...r.data }));
+      }
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const update = (name: string, value: any) => {
+    setSettings(prev => ({ ...prev, [name]: value }));
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await axios.patch(`${API}/gogoo/admin/settings`, settings, {
+        headers: { Authorization: `Bearer ${token()}` },
+      }).catch(() => {});
+      localStorage.setItem("gogoo_settings", JSON.stringify(settings));
+      toast.success("Settings saved successfully");
+    } catch {
+      localStorage.setItem("gogoo_settings", JSON.stringify(settings));
+      toast.success("Settings saved locally");
+    } finally { setSaving(false); }
+  };
+
+  const changePassword = async () => {
+    if (!newPw.trim()) { toast.error("Enter a new password"); return; }
+    if (newPw !== confirmPw) { toast.error("Passwords do not match"); return; }
+    if (newPw.length < 6)   { toast.error("Password must be at least 6 characters"); return; }
+    try {
+      await axios.patch(`${API}/gogoo/admin/change-password`,
+        { new_password: newPw },
+        { headers: { Authorization: `Bearer ${token()}` } },
+      );
+      toast.success("Password changed successfully");
+      setPwModal(false);
+      setNewPw(""); setConfirmPw("");
+    } catch {
+      toast.error("Failed to change password. Contact your backend admin.");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-2xl space-y-5 animate-pulse">
+        {Array.from({length:3}).map((_,i)=>(
+          <div key={i} className="h-40 bg-gray-100 rounded-2xl"/>
+        ))}
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-white mb-6">Settings</h1>
-      <div className="max-w-lg space-y-4">
-        <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-6 space-y-4">
-          <h2 className="text-white font-semibold">Pricing Config</h2>
-          <div>
-            <label className="text-gray-400 text-xs mb-1.5 block">GLOBAL SURGE MULTIPLIER</label>
-            <input value={surge} onChange={e => setSurge(e.target.value)}
-              className="w-full bg-[#111] border border-[#2A2A2A] rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#FF6B2B]" />
+    <div className="max-w-2xl space-y-6">
+      {/* ── Pricing & Commission ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="text-base font-bold text-gray-900">Pricing & Commission</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Controls fare calculation and platform revenue</p>
+        </div>
+        <div className="px-6">
+          <SettingRow label="Platform Commission" description="% of fare collected by gogoo" name="commission_percent" value={settings.commission_percent} onChange={update} unit="%" />
+          <SettingRow label="Surge Multiplier"    description="Global fare multiplier (1.0 = normal)" name="surge_multiplier" value={settings.surge_multiplier} onChange={update} />
+          <SettingRow label="Registration Fee"    description="One-time fee charged to new drivers" name="registration_fee" value={settings.registration_fee} onChange={update} unit="₹" />
+          <SettingRow label="Cancellation Fee"    description="Fee charged for cancellations after acceptance" name="cancellation_fee" value={settings.cancellation_fee} onChange={update} unit="₹" />
+        </div>
+      </div>
+
+      {/* ── Wallet Settings ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="text-base font-bold text-gray-900">Driver Wallet</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Wallet balance thresholds and restrictions</p>
+        </div>
+        <div className="px-6">
+          <SettingRow label="Minimum Balance"       description="Drivers below this get a low-balance warning" name="min_wallet_balance" value={settings.min_wallet_balance} onChange={update} unit="₹" />
+          <SettingRow label="Block Threshold"       description="Wallet blocked when balance falls below this" name="wallet_block_threshold" value={settings.wallet_block_threshold} onChange={update} unit="₹" />
+        </div>
+      </div>
+
+      {/* ── Operations ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="text-base font-bold text-gray-900">Operations</h3>
+        </div>
+        <div className="px-6">
+          <SettingRow label="OTP Expiry" description="Seconds before OTP expires during ride start" name="otp_expiry_seconds" value={settings.otp_expiry_seconds} onChange={update} unit="sec" />
+        </div>
+      </div>
+
+      {/* Current values preview */}
+      <div className="bg-orange-50 border border-orange-100 rounded-2xl p-5">
+        <p className="text-xs font-bold text-orange-600 uppercase tracking-wider mb-3">Current Values Preview</p>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          {Object.entries(settings).map(([k, v]) => (
+            <div key={k} className="flex justify-between">
+              <span className="text-gray-600 capitalize">{k.replace(/_/g," ")}</span>
+              <span className="font-bold text-gray-900">{String(v)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Save */}
+      <button onClick={save} disabled={saving}
+        className="flex items-center gap-2 w-full justify-center py-3 bg-orange-500 text-white rounded-2xl font-bold text-sm hover:bg-orange-600 transition disabled:opacity-50">
+        {saving ? <RefreshCw size={16} className="animate-spin"/> : <Save size={16}/>}
+        {saving ? "Saving…" : "Save Settings"}
+      </button>
+
+      {/* ── Admin Account ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="text-base font-bold text-gray-900">Admin Account</h3>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">admin@gogoo.in</p>
+              <p className="text-xs text-gray-400 mt-0.5">Master Admin · Full Access</p>
+            </div>
+            <span className="text-xs font-bold bg-orange-100 text-orange-600 px-2.5 py-1 rounded-full">Master</span>
           </div>
-          <div>
-            <label className="text-gray-400 text-xs mb-1.5 block">PLATFORM COMMISSION (%)</label>
-            <input value={commission} onChange={e => setCommission(e.target.value)}
-              className="w-full bg-[#111] border border-[#2A2A2A] rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#FF6B2B]" />
-          </div>
-          <button className="w-full bg-[#FF6B2B] text-white py-3 rounded-xl font-medium text-sm hover:bg-[#e85e22] transition">
-            Save Changes
+          <button onClick={() => setPwModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-100 transition w-full justify-center">
+            <Lock size={15}/> Change Password
           </button>
         </div>
       </div>
+
+      {/* ── Change Password Modal ── */}
+      {pwModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-bold text-gray-900">Change Password</h3>
+              <button onClick={() => { setPwModal(false); setNewPw(""); setConfirmPw(""); }}
+                className="p-1.5 hover:bg-gray-100 rounded-lg">
+                <RefreshCw size={14} className="text-gray-400" />
+              </button>
+            </div>
+            <div className="space-y-3 mb-5">
+              <div>
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">New Password</label>
+                <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)}
+                  placeholder="Min. 6 characters"
+                  className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-400 transition" />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Confirm Password</label>
+                <input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)}
+                  placeholder="Re-enter password"
+                  className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-400 transition" />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => { setPwModal(false); setNewPw(""); setConfirmPw(""); }}
+                className="flex-1 py-2.5 bg-gray-50 border border-gray-200 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-100 transition">
+                Cancel
+              </button>
+              <button onClick={changePassword}
+                className="flex-1 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-bold hover:bg-orange-600 transition">
+                Change Password
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,151 +1,110 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
+import toast from "react-hot-toast";
+import { Search, Download, X, CheckCircle, Ban, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import Pagination from "../../../../components/Pagination";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-
-type Doc = {
-  doc_type: string;
-  label: string;
-  required: boolean;
-  uploaded: boolean;
-  status: string;
-  file_url?: string;
-  file_name?: string;
-  file_size?: number;
-  mime_type?: string;
-  doc_number?: string;
-  expiry_date?: string;
-  reject_reason?: string;
-};
-
-const STATUS_STYLE: Record<string, string> = {
-  approved: "text-green-400 bg-green-400/10",
-  pending:  "text-yellow-400 bg-yellow-400/10",
-  rejected: "text-red-400 bg-red-400/10",
-  missing:  "text-gray-500 bg-[#222]",
-};
+const PER_PAGE = 50;
 
 const CATEGORY_BADGE: Record<string, string> = {
-  truck:     "text-orange-400 bg-orange-400/10",
-  cab:       "text-blue-400 bg-blue-400/10",
-  ambulance: "text-red-400 bg-red-400/10",
+  truck:     "bg-blue-100 text-blue-700",
+  cab:       "bg-orange-100 text-orange-700",
+  ambulance: "bg-red-100 text-red-700",
 };
 
-function fmtBlockedUntil(iso: string | null | undefined): string {
-  if (!iso) return "";
-  return new Date(iso).toLocaleString("en-IN", {
-    day: "2-digit", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
+function isBlocked(d: any) {
+  return d.is_blocked && d.blocked_until && new Date(d.blocked_until) > new Date();
+}
+function fmtBlocked(iso: string) {
+  return new Date(iso).toLocaleString("en-IN", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" });
 }
 
-function isStillBlocked(d: any): boolean {
-  return d.is_blocked && d.blocked_until && new Date(d.blocked_until) > new Date();
+function StatPill({ label, value, cls = "" }: any) {
+  return (
+    <div className={`bg-white border border-gray-100 rounded-xl px-4 py-3 text-center ${cls}`}>
+      <p className="text-xl font-extrabold text-gray-900">{value}</p>
+      <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide mt-0.5">{label}</p>
+    </div>
+  );
 }
 
 export default function DriversPage() {
-  const [drivers,       setDrivers]       = useState<any[]>([]);
-  const [tab,           setTab]           = useState("all");
-  const [search,        setSearch]        = useState("");
-  const [selected,      setSelected]      = useState<any | null>(null);
-  const [drawerTab,     setDrawerTab]     = useState<"docs" | "history">("docs");
-  const [docs,          setDocs]          = useState<Doc[]>([]);
-  const [docsLoading,   setDocsLoading]   = useState(false);
-  const [driverHistory, setDriverHistory] = useState<any[]>([]);
-  const [histLoading,   setHistLoading]   = useState(false);
-  const [busy,          setBusy]          = useState<string | null>(null);
-  const [blockModal,    setBlockModal]    = useState<any | null>(null);
-  const [blockReason,   setBlockReason]   = useState("");
-  const [blockHrs,      setBlockHrs]      = useState(48);
-  const [blocking,      setBlocking]      = useState(false);
+  const [drivers,     setDrivers]     = useState<any[]>([]);
+  const [tab,         setTab]         = useState("all");
+  const [search,      setSearch]      = useState("");
+  const [ratingF,     setRatingF]     = useState("all");
+  const [walletF,     setWalletF]     = useState("all");
+  const [page,        setPage]        = useState(1);
+  const [blockModal,  setBlockModal]  = useState<any | null>(null);
+  const [blockReason, setBlockReason] = useState("");
+  const [blockHrs,    setBlockHrs]    = useState(48);
+  const [blocking,    setBlocking]    = useState(false);
 
-  const token = () => (typeof window !== "undefined" ? localStorage.getItem("access_token") : null);
+  const token = () => (typeof window !== "undefined" ? localStorage.getItem("access_token") : "");
 
-  const fetchDrivers = async () => {
+  const fetchDrivers = useCallback(async () => {
     const res = await axios.get(`${API}/gogoo/drivers`, {
       headers: { Authorization: `Bearer ${token()}` },
     }).catch(() => ({ data: [] }));
     setDrivers(res.data || []);
-  };
+  }, []);
 
-  useEffect(() => { fetchDrivers(); }, []);
+  useEffect(() => { fetchDrivers(); }, [fetchDrivers]);
+  useEffect(() => { setPage(1); }, [tab, search, ratingF, walletF]);
 
-  const openDriver = async (d: any) => {
-    setSelected(d);
-    setDrawerTab("docs");
-    setDocs([]);
-    setDriverHistory([]);
-    setDocsLoading(true);
-    try {
-      const res = await axios.get(`${API}/gogoo/drivers/${d.id}/documents`, {
-        headers: { Authorization: `Bearer ${token()}` },
-      });
-      setDocs(res.data.docs || []);
-    } catch {
-      setDocs([]);
-    } finally {
-      setDocsLoading(false);
-    }
-  };
+  const filtered = drivers
+    .filter(d => {
+      if (tab === "pending")  return !d.is_verified;
+      if (tab === "online")   return d.is_online;
+      if (tab === "blocked")  return isBlocked(d);
+      return true;
+    })
+    .filter(d => {
+      if (ratingF === "low")   return Number(d.rating) < 3.5;
+      if (ratingF === "mid")   return Number(d.rating) >= 3.5 && Number(d.rating) < 4;
+      if (ratingF === "high")  return Number(d.rating) >= 4;
+      return true;
+    })
+    .filter(d => {
+      const bal = d.wallet_balance ?? -700;
+      if (walletF === "blocked") return d.is_wallet_blocked;
+      if (walletF === "low")     return !d.is_wallet_blocked && bal < 0;
+      if (walletF === "healthy") return !d.is_wallet_blocked && bal >= 0;
+      return true;
+    })
+    .filter(d => {
+      const q = search.toLowerCase();
+      return !q || d.name?.toLowerCase().includes(q) ||
+        d.email?.toLowerCase().includes(q) || d.phone?.includes(q);
+    });
 
-  const loadDriverHistory = async (driverId: string) => {
-    setHistLoading(true);
-    try {
-      const res = await axios.get(`${API}/gogoo/drivers/${driverId}/bookings`, {
-        headers: { Authorization: `Bearer ${token()}` },
-      });
-      setDriverHistory(res.data?.bookings || res.data || []);
-    } catch {
-      setDriverHistory([]);
-    } finally {
-      setHistLoading(false);
-    }
-  };
-
-  const switchDrawerTab = (t: "docs" | "history") => {
-    setDrawerTab(t);
-    if (t === "history" && selected && driverHistory.length === 0 && !histLoading) {
-      loadDriverHistory(selected.id);
-    }
-  };
-
-  const reviewDoc = async (docType: string, status: "approved" | "rejected") => {
-    if (!selected) return;
-    let reject_reason = "";
-    if (status === "rejected") {
-      reject_reason = window.prompt("Reason for rejection?") || "Document not clear";
-    }
-    setBusy(docType);
-    try {
-      await axios.patch(
-        `${API}/gogoo/drivers/${selected.id}/documents/${docType}/review`,
-        { status, reject_reason },
-        { headers: { Authorization: `Bearer ${token()}` } }
-      );
-      await openDriver(selected);
-      fetchDrivers();
-    } catch {
-      alert("Failed to update document");
-    } finally {
-      setBusy(null);
-    }
-  };
+  const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   const verify = async (id: string) => {
-    await axios.patch(`${API}/gogoo/drivers/${id}/verify`, {}, {
-      headers: { Authorization: `Bearer ${token()}` },
-    });
-    fetchDrivers();
-    if (selected?.id === id) setSelected({ ...selected, is_verified: true });
+    try {
+      await axios.patch(`${API}/gogoo/drivers/${id}/verify`, {}, {
+        headers: { Authorization: `Bearer ${token()}` },
+      });
+      toast.success("Driver verified successfully");
+      fetchDrivers();
+    } catch {
+      toast.error("Failed to verify driver");
+    }
   };
 
-  const unblockDriver = async (driverId: string) => {
-    await axios.patch(`${API}/gogoo/drivers/${driverId}/block`,
-      { action: "unblock" },
-      { headers: { Authorization: `Bearer ${token()}` } }
-    ).catch(() => {});
-    fetchDrivers();
+  const unblock = async (id: string) => {
+    try {
+      await axios.patch(`${API}/gogoo/drivers/${id}/block`, { action: "unblock" }, {
+        headers: { Authorization: `Bearer ${token()}` },
+      });
+      toast.success("Driver unblocked");
+      fetchDrivers();
+    } catch {
+      toast.error("Failed to unblock driver");
+    }
   };
 
   const submitBlock = async () => {
@@ -154,417 +113,262 @@ export default function DriversPage() {
     try {
       await axios.patch(`${API}/gogoo/drivers/${blockModal.id}/block`,
         { action: "block", reason: blockReason || "Manually blocked by admin", duration_hrs: blockHrs },
-        { headers: { Authorization: `Bearer ${token()}` } }
+        { headers: { Authorization: `Bearer ${token()}` } },
       );
+      toast.success(`${blockModal.name} blocked for ${blockHrs}h`);
       setBlockModal(null);
       setBlockReason("");
-      setBlockHrs(48);
       fetchDrivers();
     } catch {
-      alert("Failed to block driver");
+      toast.error("Failed to block driver");
     } finally {
       setBlocking(false);
     }
   };
 
-  const fmtBytes = (b?: number) => {
-    if (!b) return "";
-    if (b < 1024) return `${b} B`;
-    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
-    return `${(b / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
   const downloadXLSX = () => {
-    const t = token();
-    window.open(`${API}/gogoo/export/drivers.xlsx?token=${t}`, "_blank");
+    window.open(`${API}/gogoo/export/drivers.xlsx?token=${token()}`, "_blank");
+    toast.success("Downloading Excel file…");
   };
 
-  const filtered = drivers
-    .filter(d => {
-      if (tab === "pending")  return !d.is_verified;
-      if (tab === "online")   return d.is_online;
-      if (tab === "blocked")  return isStillBlocked(d);
-      return true;
-    })
-    .filter(d => {
-      const q = search.toLowerCase();
-      return !q || d.name?.toLowerCase().includes(q) || d.email?.toLowerCase().includes(q) || d.phone?.includes(q);
-    });
-
-  const blockedCount = drivers.filter(isStillBlocked).length;
+  // stats
+  const onlineCount  = drivers.filter(d => d.is_online).length;
+  const blockedCount = drivers.filter(isBlocked).length;
+  const pendingCount = drivers.filter(d => !d.is_verified).length;
+  const newThisWeek  = drivers.filter(d => {
+    if (!d.created_at) return false;
+    return (Date.now() - new Date(d.created_at).getTime()) < 7 * 86400000;
+  }).length;
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Drivers</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{filtered.length} drivers</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={downloadXLSX}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl text-sm font-semibold transition"
-          >
-            ⬇ Export Excel
-          </button>
-          <div className="flex gap-1 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-1">
-            {(["all", "pending", "online", "blocked"] as const).map(t => (
+    <div className="space-y-5">
+      {/* ── Stats bar ── */}
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+        <StatPill label="Total"       value={drivers.length} />
+        <StatPill label="Online"      value={onlineCount} />
+        <StatPill label="Offline"     value={drivers.length - onlineCount} />
+        <StatPill label="Blocked"     value={blockedCount} />
+        <StatPill label="Pending Docs" value={pendingCount} />
+        <StatPill label="New This Week" value={newThisWeek} />
+      </div>
+
+      {/* ── Toolbar ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Search */}
+          <div className="relative">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Name, email, phone…"
+              className="pl-9 pr-9 py-2.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-orange-400 transition w-64" />
+            {search && (
+              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          {/* Status tabs */}
+          <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+            {(["all","pending","online","blocked"] as const).map(t => (
               <button key={t} onClick={() => setTab(t)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition flex items-center gap-1 ${
-                  tab === t ? "bg-[#FF6B2B] text-white" : "text-gray-400 hover:text-white"
-                }`}
-              >
-                {t}
-                {t === "blocked" && blockedCount > 0 && (
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${tab === "blocked" ? "bg-white/20" : "bg-red-500/80 text-white"}`}>
-                    {blockedCount}
-                  </span>
-                )}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition ${
+                  tab === t ? "bg-white text-orange-500 shadow-sm" : "text-gray-500 hover:text-gray-900"
+                }`}>
+                {t}{t === "blocked" && blockedCount > 0 ? ` (${blockedCount})` : ""}
               </button>
             ))}
           </div>
+
+          {/* Rating filter */}
+          <select value={ratingF} onChange={e => setRatingF(e.target.value)}
+            className="px-3 py-2.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none text-gray-700">
+            <option value="all">All ratings</option>
+            <option value="low">Below 3.5 ⭐</option>
+            <option value="mid">3.5 – 4.0 ⭐</option>
+            <option value="high">Above 4.0 ⭐</option>
+          </select>
+
+          {/* Wallet filter */}
+          <select value={walletF} onChange={e => setWalletF(e.target.value)}
+            className="px-3 py-2.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none text-gray-700">
+            <option value="all">All wallets</option>
+            <option value="blocked">Wallet blocked</option>
+            <option value="low">Low balance</option>
+            <option value="healthy">Healthy balance</option>
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button onClick={fetchDrivers} className="p-2 hover:bg-gray-100 rounded-xl text-gray-400">
+            <RefreshCw size={16} />
+          </button>
+          <button onClick={downloadXLSX}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 transition">
+            <Download size={15} /> Export Excel
+          </button>
         </div>
       </div>
 
-      {/* Search */}
-      <div className="mb-4">
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search by name, email, or phone…"
-          className="w-full max-w-sm bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl px-4 py-2.5 text-white placeholder-gray-600 text-sm focus:outline-none focus:border-[#FF6B2B]"
-        />
-      </div>
-
-      {/* Blocked banner */}
+      {/* ── Blocked banner ── */}
       {tab !== "blocked" && blockedCount > 0 && (
-        <div className="mb-4 flex items-center gap-3 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-          <span className="text-red-400 text-lg">🚫</span>
-          <p className="text-red-300 text-sm flex-1">
-            <span className="font-bold">{blockedCount} driver{blockedCount !== 1 ? "s" : ""}</span> currently blocked due to excessive cancellations.
+        <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 flex items-center gap-3">
+          <Ban size={16} className="text-red-500 flex-shrink-0" />
+          <p className="text-sm text-red-700 flex-1">
+            <span className="font-bold">{blockedCount} driver{blockedCount > 1 ? "s" : ""}</span> currently blocked.
           </p>
           <button onClick={() => setTab("blocked")}
-            className="text-xs px-3 py-1.5 bg-red-500/20 text-red-300 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition">
+            className="text-xs px-3 py-1.5 bg-red-100 text-red-700 rounded-lg font-semibold hover:bg-red-200 transition">
             View Blocked
           </button>
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-3">
-        {filtered.length === 0 && (
-          <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-10 text-center text-gray-600">No drivers found</div>
-        )}
-        {filtered.map((d: any) => {
-          const blocked = isStillBlocked(d);
-          return (
-            <div key={d.id} className={`bg-[#1A1A1A] border rounded-2xl p-5 flex items-center gap-5 ${blocked ? "border-red-500/30" : "border-[#2A2A2A]"}`}>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold flex-shrink-0 ${blocked ? "bg-red-500/20 text-red-400" : "bg-[#FF6B2B]/20 text-[#FF6B2B]"}`}>
-                {d.name?.[0]?.toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-white font-medium">{d.name}</p>
-                  {d.is_online && <span className="w-2 h-2 rounded-full bg-green-400" />}
-                  {d.is_verified
-                    ? <span className="text-xs text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">Verified</span>
-                    : <span className="text-xs text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full">Pending</span>
-                  }
-                  {d.vehicle_category && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full capitalize font-medium ${CATEGORY_BADGE[d.vehicle_category] || "text-gray-400 bg-gray-400/10"}`}>
-                      {d.vehicle_category}
-                    </span>
-                  )}
-                  {blocked && (
-                    <span className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 px-2 py-0.5 rounded-full font-medium">
-                      🚫 Blocked until {fmtBlockedUntil(d.blocked_until)}
-                    </span>
-                  )}
-                </div>
-                <p className="text-gray-500 text-xs mt-0.5">
-                  📧 {d.email || "—"} &nbsp;·&nbsp; 📱 {d.phone || "—"}
-                </p>
-                {blocked && d.block_reason && (
-                  <p className="text-red-400/70 text-xs mt-0.5 italic">{d.block_reason}</p>
-                )}
-              </div>
-              <div className="text-center hidden md:block">
-                <p className="text-white text-sm font-medium">{d.vehicle_model}</p>
-                <p className="text-gray-500 text-xs">{d.vehicle_number}</p>
-                <span className="text-xs text-gray-400 capitalize bg-[#111] px-2 py-0.5 rounded mt-1 inline-block">{d.vehicle_type?.replace(/_/g, " ")}</span>
-              </div>
-              <div className="text-center hidden lg:block">
-                <p className="text-white text-sm font-bold">⭐ {Number(d.rating).toFixed(1)}</p>
-                <p className="text-gray-500 text-xs">{d.total_rides} rides</p>
-              </div>
-              <div className="text-center hidden xl:block min-w-[90px]">
-                <p className={`text-sm font-bold ${
-                  d.wallet_balance == null ? "text-gray-500"
-                  : d.wallet_balance >= 500 ? "text-green-400"
-                  : d.wallet_balance >= 0   ? "text-yellow-400"
-                  : "text-red-400"
-                }`}>
-                  ₹{Math.round(d.wallet_balance ?? -700)}
-                </p>
-                <p className={`text-xs mt-0.5 ${
-                  d.is_wallet_blocked ? "text-red-400"
-                  : (d.wallet_balance ?? -700) < 0 ? "text-yellow-500"
-                  : "text-green-500"
-                }`}>
-                  {d.is_wallet_blocked ? "🚫 Blocked"
-                   : (d.wallet_balance ?? -700) < 0 ? "⚠️ Low"
-                   : "✅ Active"}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <button onClick={() => openDriver(d)}
-                  className="px-4 py-2 bg-[#FF6B2B]/10 text-[#FF6B2B] border border-[#FF6B2B]/30 rounded-xl text-xs font-medium hover:bg-[#FF6B2B]/20 transition">
-                  View Docs
-                </button>
-                {!d.is_verified && !blocked && (
-                  <button onClick={() => verify(d.id)}
-                    className="px-4 py-2 bg-green-500/10 text-green-400 border border-green-500/20 rounded-xl text-xs font-medium hover:bg-green-500/20 transition">
-                    Verify
-                  </button>
-                )}
-                {blocked ? (
-                  <button onClick={() => unblockDriver(d.id)}
-                    className="px-4 py-2 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl text-xs font-medium hover:bg-red-500/20 transition">
-                    Unblock
-                  </button>
-                ) : (
-                  <button onClick={() => { setBlockModal(d); setBlockReason(""); setBlockHrs(48); }}
-                    className="px-4 py-2 bg-[#222] text-gray-400 border border-[#333] rounded-xl text-xs font-medium hover:text-red-400 hover:border-red-500/30 transition">
-                    Block
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
+      {/* ── Table ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                {["Driver","Vehicle","Category","Rides","Rating","Wallet","Status","Actions"].map(h => (
+                  <th key={h} className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {paged.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-5 py-16 text-center">
+                    <div className="text-4xl mb-3">🚗</div>
+                    <p className="text-base font-semibold text-gray-900 mb-1">No drivers found</p>
+                    <p className="text-sm text-gray-400">Try adjusting filters</p>
+                  </td>
+                </tr>
+              ) : paged.map(d => {
+                const blocked = isBlocked(d);
+                const balance = d.wallet_balance ?? -700;
+                return (
+                  <tr key={d.id} className="hover:bg-gray-50 transition">
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ${blocked ? "bg-red-500" : "bg-orange-500"}`}>
+                          {d.name?.[0]?.toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{d.name}</p>
+                          <p className="text-xs text-gray-400">{d.phone}</p>
+                        </div>
+                        {d.is_online && <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <p className="text-sm text-gray-800 font-medium">{d.vehicle_model || "—"}</p>
+                      <p className="text-xs text-gray-400">{d.vehicle_number}</p>
+                    </td>
+                    <td className="px-5 py-4">
+                      <span className={`text-xs font-bold px-2 py-1 rounded-full capitalize ${CATEGORY_BADGE[d.vehicle_category] || "bg-gray-100 text-gray-600"}`}>
+                        {d.vehicle_category}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-sm text-gray-700">{d.total_rides || 0}</td>
+                    <td className="px-5 py-4 text-sm font-semibold text-gray-900">⭐ {Number(d.rating || 0).toFixed(1)}</td>
+                    <td className="px-5 py-4">
+                      <span className={`text-sm font-bold ${balance < 0 ? "text-red-500" : balance < 500 ? "text-yellow-600" : "text-green-600"}`}>
+                        ₹{Math.round(balance).toLocaleString("en-IN")}
+                      </span>
+                      {d.is_wallet_blocked && <p className="text-[10px] text-red-400 font-semibold">Wallet Blocked</p>}
+                    </td>
+                    <td className="px-5 py-4">
+                      {blocked ? (
+                        <div>
+                          <span className="text-[11px] font-bold bg-red-100 text-red-700 px-2 py-1 rounded-full">Blocked</span>
+                          <p className="text-[10px] text-gray-400 mt-1">{fmtBlocked(d.blocked_until)}</p>
+                        </div>
+                      ) : d.is_verified ? (
+                        <span className="text-[11px] font-bold bg-green-100 text-green-700 px-2 py-1 rounded-full">Verified</span>
+                      ) : (
+                        <span className="text-[11px] font-bold bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">Pending</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-1.5">
+                        <Link href={`/dashboard/drivers/${d.id}`}
+                          className="px-3 py-1.5 text-xs font-semibold bg-orange-50 text-orange-500 border border-orange-200 rounded-lg hover:bg-orange-100 transition">
+                          View
+                        </Link>
+                        {!d.is_verified && !blocked && (
+                          <button onClick={() => verify(d.id)}
+                            className="px-3 py-1.5 text-xs font-semibold bg-green-50 text-green-600 border border-green-200 rounded-lg hover:bg-green-100 transition">
+                            Verify
+                          </button>
+                        )}
+                        {blocked ? (
+                          <button onClick={() => unblock(d.id)}
+                            className="px-3 py-1.5 text-xs font-semibold bg-gray-50 text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-100 transition">
+                            Unblock
+                          </button>
+                        ) : (
+                          <button onClick={() => { setBlockModal(d); setBlockReason(""); setBlockHrs(48); }}
+                            className="px-3 py-1.5 text-xs font-semibold bg-red-50 text-red-500 border border-red-200 rounded-lg hover:bg-red-100 transition">
+                            Block
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <Pagination page={page} total={filtered.length} perPage={PER_PAGE} onChange={setPage} />
       </div>
 
-      {/* Document review drawer */}
-      {selected && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setSelected(null)} />
-          <div className="relative w-full max-w-lg h-full bg-[#0F0F0F] border-l border-[#2A2A2A] overflow-y-auto">
-            <div className="sticky top-0 bg-[#0F0F0F] border-b border-[#2A2A2A] p-5">
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <h2 className="text-white font-bold text-lg">{selected.name}</h2>
-                  <p className="text-gray-400 text-xs mt-0.5">📧 {selected.email || "—"}</p>
-                  <p className="text-gray-400 text-xs">📱 {selected.phone || "—"}</p>
-                  {selected.vehicle_category && (
-                    <span className={`mt-1 inline-block text-xs px-2 py-0.5 rounded-full capitalize font-medium ${CATEGORY_BADGE[selected.vehicle_category] || "text-gray-400 bg-gray-400/10"}`}>
-                      {selected.vehicle_category} · {selected.vehicle_type?.replace(/_/g, " ")}
-                    </span>
-                  )}
-                </div>
-                <button onClick={() => setSelected(null)} className="text-gray-500 hover:text-white text-xl">✕</button>
-              </div>
-              <div className="flex gap-1 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-1">
-                {(["docs", "history"] as const).map(t => (
-                  <button key={t} onClick={() => switchDrawerTab(t)}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium capitalize transition ${
-                      drawerTab === t ? "bg-[#FF6B2B] text-white" : "text-gray-400 hover:text-white"
-                    }`}
-                  >
-                    {t === "docs" ? "📄 Documents" : "🚗 Ride History"}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {drawerTab === "docs" && (
-            <div className="p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400 text-sm">Verification status</span>
-                {selected.is_verified
-                  ? <span className="text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded-full">Verified</span>
-                  : <span className="text-xs text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded-full">Pending</span>}
-              </div>
-
-              {docsLoading ? (
-                <div className="text-gray-500 text-sm py-8 text-center">Loading documents…</div>
-              ) : docs.length === 0 ? (
-                <div className="text-gray-500 text-sm py-8 text-center">No documents uploaded yet.</div>
-              ) : docs.map(doc => (
-                <div key={doc.doc_type} className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-white text-sm font-medium">{doc.label}</p>
-                    <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${STATUS_STYLE[doc.status] || STATUS_STYLE.missing}`}>
-                      {doc.status === "missing" ? "not uploaded" : doc.status}
-                    </span>
-                  </div>
-
-                  {doc.doc_number    && <p className="text-gray-500 text-xs">No: {doc.doc_number}</p>}
-                  {doc.expiry_date   && <p className="text-gray-500 text-xs">Expiry: {doc.expiry_date}</p>}
-                  {doc.reject_reason && <p className="text-red-400 text-xs mt-1">⚠ {doc.reject_reason}</p>}
-
-                  {doc.uploaded && doc.file_url ? (
-                    <div className="mt-3">
-                      {doc.mime_type === "application/pdf" ? (
-                        <a href={`${API}${doc.file_url}`} target="_blank" rel="noreferrer"
-                          className="inline-block text-xs text-[#FF6B2B] underline">
-                          📑 {doc.file_name} ({fmtBytes(doc.file_size)})
-                        </a>
-                      ) : (
-                        <a href={`${API}${doc.file_url}`} target="_blank" rel="noreferrer">
-                          <img src={`${API}${doc.file_url}`} alt={doc.label}
-                            className="rounded-lg border border-[#2A2A2A] max-h-48 object-cover" />
-                        </a>
-                      )}
-
-                      {doc.status !== "approved" && (
-                        <div className="flex gap-2 mt-3">
-                          <button disabled={busy === doc.doc_type}
-                            onClick={() => reviewDoc(doc.doc_type, "approved")}
-                            className="flex-1 py-2 bg-green-500/10 text-green-400 border border-green-500/20 rounded-lg text-xs font-medium hover:bg-green-500/20 transition disabled:opacity-50">
-                            ✓ Approve
-                          </button>
-                          <button disabled={busy === doc.doc_type}
-                            onClick={() => reviewDoc(doc.doc_type, "rejected")}
-                            className="flex-1 py-2 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg text-xs font-medium hover:bg-red-500/20 transition disabled:opacity-50">
-                            ✗ Reject
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-gray-600 text-xs mt-2">Driver has not uploaded this document.</p>
-                  )}
-                </div>
-              ))}
-            </div>
-            )}
-
-            {drawerTab === "history" && (() => {
-              const completed = driverHistory.filter(b => b.status === "completed").length;
-              const cancelled = driverHistory.filter(b => b.status === "cancelled").length;
-              const STATUS_BADGE: Record<string, string> = {
-                completed:   "text-green-400 bg-green-400/10 border-green-400/20",
-                cancelled:   "text-red-400 bg-red-400/10 border-red-400/20",
-                in_progress: "text-blue-400 bg-blue-400/10 border-blue-400/20",
-                accepted:    "text-yellow-400 bg-yellow-400/10 border-yellow-400/20",
-                arriving:    "text-orange-400 bg-orange-400/10 border-orange-400/20",
-                searching:   "text-gray-400 bg-gray-400/10 border-gray-400/20",
-              };
-              return (
-                <div className="p-5 space-y-3">
-                  {histLoading ? (
-                    <div className="text-gray-500 text-sm py-10 text-center">Loading ride history…</div>
-                  ) : driverHistory.length === 0 ? (
-                    <div className="text-gray-600 text-sm py-10 text-center">
-                      <p className="text-3xl mb-2">🚗</p>
-                      <p>No rides yet for this driver.</p>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="grid grid-cols-3 gap-3 mb-1">
-                        <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-3 text-center">
-                          <p className="text-white font-bold text-xl">{driverHistory.length}</p>
-                          <p className="text-gray-500 text-xs mt-0.5">Total</p>
-                        </div>
-                        <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3 text-center">
-                          <p className="text-green-400 font-bold text-xl">{completed}</p>
-                          <p className="text-gray-500 text-xs mt-0.5">Completed</p>
-                        </div>
-                        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
-                          <p className="text-red-400 font-bold text-xl">{cancelled}</p>
-                          <p className="text-gray-500 text-xs mt-0.5">Cancelled</p>
-                        </div>
-                      </div>
-                      {driverHistory.map((b: any) => (
-                        <div key={b.id} className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className={`text-xs px-2 py-0.5 rounded-full capitalize font-medium border ${STATUS_BADGE[b.status] || "text-gray-400 bg-gray-400/10 border-gray-400/20"}`}>
-                              {b.status?.replace("_", " ")}
-                            </span>
-                            <span className="text-white font-bold text-sm">Rs.{Math.round(b.fare || 0)}</span>
-                          </div>
-                          <div className="space-y-1 mb-2">
-                            <p className="text-gray-400 text-xs flex gap-2">
-                              <span className="text-green-400 flex-shrink-0">▲</span>
-                              <span>{b.pickup_address || "—"}</span>
-                            </p>
-                            <p className="text-gray-400 text-xs flex gap-2">
-                              <span className="text-[#FF6B2B] flex-shrink-0">▼</span>
-                              <span>{b.drop_address || "—"}</span>
-                            </p>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <p className="text-gray-600 text-xs">
-                              {b.created_at
-                                ? new Date(b.created_at).toLocaleString("en-IN", {
-                                    day: "2-digit", month: "short", year: "numeric",
-                                    hour: "2-digit", minute: "2-digit",
-                                  })
-                                : "—"}
-                            </p>
-                            {b.rider_name && <p className="text-gray-500 text-xs">👤 {b.rider_name}</p>}
-                          </div>
-                          {b.status === "cancelled" && (b.cancelled_by || b.cancel_reason) && (
-                            <div className="mt-2 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-                              {b.cancelled_by && (
-                                <p className="text-red-400 text-xs">
-                                  Cancelled by: <span className="font-semibold capitalize">{b.cancelled_by}</span>
-                                </p>
-                              )}
-                              {b.cancel_reason && (
-                                <p className="text-red-300/70 text-xs mt-0.5">{b.cancel_reason}</p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
-
-      {/* Manual block modal */}
+      {/* ── Block Modal ── */}
       {blockModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-6 w-full max-w-md">
-            <h3 className="text-white font-bold text-lg mb-1">Block Driver</h3>
-            <p className="text-gray-400 text-sm mb-5">
-              Block <span className="text-white font-medium">{blockModal.name}</span> from accepting rides.
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md border border-gray-100">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-gray-900">Block Driver</h3>
+              <button onClick={() => setBlockModal(null)} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                <X size={16} className="text-gray-500" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-5">
+              Block <span className="font-semibold text-gray-900">{blockModal.name}</span> from accepting rides.
             </p>
 
-            <label className="text-gray-400 text-xs mb-1 block">Block duration</label>
-            <div className="flex gap-2 mb-4">
-              {[24, 48, 72, 168].map(h => (
+            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Duration</p>
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {[24,48,72,168].map(h => (
                 <button key={h} onClick={() => setBlockHrs(h)}
-                  className={`flex-1 py-2 rounded-xl text-xs font-medium border transition ${
+                  className={`py-2 rounded-xl text-xs font-semibold border transition ${
                     blockHrs === h
-                      ? "bg-red-500/20 text-red-300 border-red-500/40"
-                      : "bg-[#111] text-gray-400 border-[#2A2A2A] hover:border-red-500/30"
+                      ? "bg-red-50 text-red-600 border-red-200"
+                      : "bg-gray-50 text-gray-500 border-gray-200 hover:border-red-200"
                   }`}>
-                  {h < 24 ? `${h}h` : h === 24 ? "1 day" : h === 48 ? "2 days" : h === 72 ? "3 days" : "7 days"}
+                  {h === 24 ? "1 day" : h === 48 ? "2 days" : h === 72 ? "3 days" : "7 days"}
                 </button>
               ))}
             </div>
 
-            <label className="text-gray-400 text-xs mb-1 block">Reason (optional)</label>
-            <input
+            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Reason</p>
+            <textarea
               value={blockReason}
               onChange={e => setBlockReason(e.target.value)}
-              placeholder="e.g. Repeated cancellations, complaints from riders…"
-              className="w-full bg-[#111] border border-[#2A2A2A] rounded-xl px-3 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-red-500/50 mb-5"
+              placeholder="Reason for blocking (optional)…"
+              rows={3}
+              className="w-full px-4 py-3 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-red-400 resize-none mb-5 transition"
             />
 
             <div className="flex gap-3">
               <button onClick={() => setBlockModal(null)}
-                className="flex-1 py-2.5 bg-[#111] text-gray-400 border border-[#2A2A2A] rounded-xl text-sm hover:text-white transition">
+                className="flex-1 py-2.5 bg-gray-50 text-gray-600 border border-gray-200 rounded-xl text-sm font-semibold hover:bg-gray-100 transition">
                 Cancel
               </button>
               <button onClick={submitBlock} disabled={blocking}
-                className="flex-1 py-2.5 bg-red-500/20 text-red-300 border border-red-500/30 rounded-xl text-sm font-semibold hover:bg-red-500/30 transition disabled:opacity-50">
-                {blocking ? "Blocking…" : "🚫 Block Driver"}
+                className="flex-1 py-2.5 bg-red-500 text-white rounded-xl text-sm font-bold hover:bg-red-600 transition disabled:opacity-50">
+                {blocking ? "Blocking…" : "Block Driver"}
               </button>
             </div>
           </div>

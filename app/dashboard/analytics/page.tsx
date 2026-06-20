@@ -1,374 +1,384 @@
 "use client";
 import { useEffect, useState } from "react";
 import axios from "axios";
+import {
+  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend,
+} from "recharts";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
-function StatCard({ icon, label, value, sub, color }: any) {
+const COLORS = {
+  orange: "#FF6B2B", blue: "#3B82F6", green: "#10B981",
+  red: "#EF4444", purple: "#8B5CF6", yellow: "#F59E0B",
+};
+
+function KPI({ label, value, sub, color = "text-gray-900" }: any) {
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-      <div className={`w-10 h-10 ${color} rounded-xl flex items-center justify-center text-lg mb-3`}>
-        {icon}
-      </div>
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
-      <p className="text-gray-500 text-xs mt-1">{label}</p>
-      {sub && <p className="text-gray-400 text-xs mt-0.5">{sub}</p>}
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">{label}</p>
+      <p className={`text-2xl font-extrabold ${color}`}>{value}</p>
+      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
     </div>
   );
 }
 
-function BarChart({ data, color = "#FF6B2B", label }: { data: { label: string; value: number }[]; color?: string; label: string }) {
-  const max = Math.max(...data.map(d => d.value), 1);
+const CHART_TOOLTIP = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
   return (
-    <div>
-      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">{label}</p>
-      <div className="flex items-end gap-2 h-28">
-        {data.map((d, i) => (
-          <div key={i} className="flex-1 flex flex-col items-center gap-1">
-            <span className="text-xs text-gray-500 font-medium">{d.value}</span>
-            <div
-              className="w-full rounded-t-lg transition-all"
-              style={{ height: `${Math.max((d.value / max) * 100, 4)}%`, backgroundColor: color, minHeight: 4 }}
-            />
-            <span className="text-xs text-gray-400 truncate w-full text-center">{d.label}</span>
-          </div>
-        ))}
-      </div>
+    <div className="bg-white border border-gray-100 rounded-xl shadow-lg px-3 py-2 text-xs">
+      <p className="font-semibold text-gray-700 mb-1">{label}</p>
+      {payload.map((p: any, i: number) => (
+        <p key={i} style={{ color: p.color || "#FF6B2B" }}>
+          {p.name}: <span className="font-bold">{p.value}</span>
+        </p>
+      ))}
     </div>
   );
-}
+};
 
-function DonutChart({ segments, size = 120 }: { segments: { label: string; value: number; color: string }[]; size?: number }) {
-  const total = segments.reduce((s, x) => s + x.value, 0) || 1;
-  let cumulative = 0;
-  const r = 40;
-  const cx = size / 2;
-  const cy = size / 2;
-
-  const paths = segments.map(seg => {
-    const pct = seg.value / total;
-    const startAngle = cumulative * 2 * Math.PI - Math.PI / 2;
-    const endAngle = (cumulative + pct) * 2 * Math.PI - Math.PI / 2;
-    cumulative += pct;
-    const x1 = cx + r * Math.cos(startAngle);
-    const y1 = cy + r * Math.sin(startAngle);
-    const x2 = cx + r * Math.cos(endAngle);
-    const y2 = cy + r * Math.sin(endAngle);
-    const largeArc = pct > 0.5 ? 1 : 0;
-    return { d: `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`, color: seg.color, label: seg.label, value: seg.value };
-  });
-
-  return (
-    <div className="flex items-center gap-6">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {paths.map((p, i) => <path key={i} d={p.d} fill={p.color} opacity={0.85} />)}
-        <circle cx={cx} cy={cy} r={24} fill="white" />
-        <text x={cx} y={cy + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="#111">{total}</text>
-      </svg>
-      <div className="flex flex-col gap-2">
-        {segments.map((s, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
-            <span className="text-xs text-gray-600">{s.label}</span>
-            <span className="text-xs font-bold text-gray-900 ml-auto">{s.value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+const TIME_FILTERS = ["Today", "This Week", "This Month", "All Time"] as const;
+type TimeFilter = typeof TIME_FILTERS[number];
 
 export default function AnalyticsPage() {
-  const [stats,    setStats]    = useState<any>(null);
   const [bookings, setBookings] = useState<any[]>([]);
   const [drivers,  setDrivers]  = useState<any[]>([]);
   const [riders,   setRiders]   = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
+  const [analytics,setAnalytics]= useState<any>(null);
   const [loading,  setLoading]  = useState(true);
+  const [timeF,    setTimeF]    = useState<TimeFilter>("This Month");
 
   const token = () => localStorage.getItem("access_token");
 
   useEffect(() => {
     const h = { Authorization: `Bearer ${token()}` };
     Promise.all([
-      axios.get(`${API}/gogoo/analytics`,  { headers: h }).catch(() => ({ data: {} })),
-      axios.get(`${API}/gogoo/bookings`,   { headers: h }).catch(() => ({ data: [] })),
-      axios.get(`${API}/gogoo/drivers`,    { headers: h }).catch(() => ({ data: [] })),
-      axios.get(`${API}/gogoo/riders`,     { headers: h }).catch(() => ({ data: [] })),
-      axios.get(`${API}/gogoo/payments`,   { headers: h }).catch(() => ({ data: [] })),
-    ]).then(([s, b, d, r, p]) => {
-      setStats(s.data);
+      axios.get(`${API}/gogoo/analytics`, { headers: h }).catch(() => ({ data: {} })),
+      axios.get(`${API}/gogoo/bookings`,  { headers: h }).catch(() => ({ data: [] })),
+      axios.get(`${API}/gogoo/drivers`,   { headers: h }).catch(() => ({ data: [] })),
+      axios.get(`${API}/gogoo/riders`,    { headers: h }).catch(() => ({ data: [] })),
+      axios.get(`${API}/gogoo/payments`,  { headers: h }).catch(() => ({ data: [] })),
+    ]).then(([a, b, d, r, p]) => {
+      setAnalytics(a.data);
       setBookings(b.data || []);
-      setDrivers(d.data || []);
-      setRiders(r.data || []);
+      setDrivers(d.data  || []);
+      setRiders(r.data   || []);
       setPayments(p.data || []);
       setLoading(false);
     });
   }, []);
 
-  const totalRevenue    = payments.filter(p => p.status === "completed").reduce((s, p) => s + Number(p.amount || 0), 0);
-  const platformFee     = payments.filter(p => p.status === "completed").reduce((s, p) => s + Number(p.platform_fee || 0), 0);
-  const completedTrips  = bookings.filter(b => b.status === "completed").length;
-  const cancelledTrips  = bookings.filter(b => b.status === "cancelled").length;
-  const activeTrips     = bookings.filter(b => ["searching","accepted","arriving","in_progress"].includes(b.status)).length;
-  const conversionRate  = bookings.length ? Math.round((completedTrips / bookings.length) * 100) : 0;
-  const verifiedDrivers = drivers.filter(d => d.is_verified).length;
-  const onlineDrivers   = drivers.filter(d => d.is_online).length;
-  const avgRating       = drivers.length ? (drivers.reduce((s, d) => s + Number(d.rating || 0), 0) / drivers.length).toFixed(1) : "—";
+  const inRange = (iso: string) => {
+    const d = new Date(iso);
+    const now = new Date();
+    if (timeF === "Today") return d.toDateString() === now.toDateString();
+    if (timeF === "This Week") return (now.getTime() - d.getTime()) < 7 * 86400000;
+    if (timeF === "This Month") return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    return true;
+  };
 
-  const statusSegments = [
-    { label: "Completed",   value: completedTrips, color: "#10B981" },
-    { label: "Searching",   value: bookings.filter(b => b.status === "searching").length,   color: "#F59E0B" },
-    { label: "In Progress", value: bookings.filter(b => b.status === "in_progress").length, color: "#3B82F6" },
-    { label: "Cancelled",   value: cancelledTrips, color: "#EF4444" },
-  ].filter(s => s.value > 0);
+  const filtBookings = bookings.filter(b => inRange(b.created_at));
+  const filtPayments = payments.filter(p => inRange(p.created_at));
 
-  const categorySegments = [
-    { label: "Cab",       value: drivers.filter(d => d.vehicle_category === "cab").length,       color: "#3B82F6" },
-    { label: "Truck",     value: drivers.filter(d => d.vehicle_category === "truck").length,     color: "#FF6B2B" },
-    { label: "Ambulance", value: drivers.filter(d => d.vehicle_category === "ambulance").length, color: "#EF4444" },
-  ].filter(s => s.value > 0);
+  const completed   = filtBookings.filter(b => b.status === "completed").length;
+  const cancelled   = filtBookings.filter(b => b.status === "cancelled").length;
+  const active      = filtBookings.filter(b => ["searching","accepted","arriving","in_progress"].includes(b.status)).length;
+  const convRate    = filtBookings.length ? Math.round((completed / filtBookings.length) * 100) : 0;
+  const revenue     = filtPayments.filter(p=>p.status==="completed").reduce((s,p)=>s+Number(p.amount||0),0);
+  const commission  = filtPayments.filter(p=>p.status==="completed").reduce((s,p)=>s+Number(p.platform_fee||0),0);
+  const verifiedD   = drivers.filter(d => d.is_verified).length;
+  const onlineD     = drivers.filter(d => d.is_online).length;
+  const avgRating   = drivers.length ? (drivers.reduce((s,d)=>s+Number(d.rating||0),0)/drivers.length).toFixed(1) : "—";
 
-  const dailyData = (stats?.daily_bookings || []).map((d: any) => ({ label: d.day, value: d.count }));
+  // ── Bookings by day ──────────────────────────────────────
+  const dailyBookings: Record<string, number> = {};
+  const driverSignups: Record<string, number> = {};
+  const riderSignups:  Record<string, number> = {};
+  const revenueByDay:  Record<string, number> = {};
 
-  const serviceCount: Record<string, number> = {};
-  bookings.forEach(b => {
-    const s = b.service_name || "Unknown";
-    serviceCount[s] = (serviceCount[s] || 0) + 1;
+  filtBookings.forEach(b => {
+    const d = new Date(b.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"short"});
+    dailyBookings[d] = (dailyBookings[d]||0) + 1;
   });
-  const serviceData = Object.entries(serviceCount)
-    .sort((a, b) => b[1] - a[1]).slice(0, 7)
-    .map(([label, value]) => ({ label, value }));
-
-  const revenueByDay: Record<string, number> = {};
-  payments.forEach(p => {
-    if (p.status !== "completed") return;
-    const day = new Date(p.created_at).toLocaleDateString("en-IN", { weekday: "short" });
-    revenueByDay[day] = (revenueByDay[day] || 0) + Number(p.amount || 0);
+  drivers.filter(d=>d.created_at && inRange(d.created_at)).forEach(d => {
+    const key = new Date(d.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"short"});
+    driverSignups[key] = (driverSignups[key]||0) + 1;
   });
-  const revenueData = Object.entries(revenueByDay).map(([label, value]) => ({ label, value: Math.round(value) }));
+  riders.filter(r=>r.created_at && inRange(r.created_at)).forEach(r => {
+    const key = new Date(r.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"short"});
+    riderSignups[key] = (riderSignups[key]||0) + 1;
+  });
+  filtPayments.filter(p=>p.status==="completed").forEach(p => {
+    const key = new Date(p.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"short"});
+    revenueByDay[key] = (revenueByDay[key]||0) + Number(p.amount||0);
+  });
 
-  const riderActivity: Record<string, number> = {};
-  bookings.forEach(b => { if (b.rider_name) riderActivity[b.rider_name] = (riderActivity[b.rider_name] || 0) + 1; });
-  const topRiders = Object.entries(riderActivity).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const keys = [...new Set([...Object.keys(dailyBookings),...Object.keys(revenueByDay)])].sort((a,b)=>new Date(a).getTime()-new Date(b).getTime());
+  const trendData = keys.map(k => ({
+    day: k,
+    bookings: dailyBookings[k] || 0,
+    revenue: Math.round(revenueByDay[k] || 0),
+  }));
 
-  const topDrivers = [...drivers].sort((a, b) => (b.total_rides || 0) - (a.total_rides || 0)).slice(0, 5);
+  // ── Status pie ───────────────────────────────────────────
+  const statusPie = [
+    { name:"Completed",   value: completed, color: COLORS.green  },
+    { name:"Cancelled",   value: cancelled, color: COLORS.red    },
+    { name:"Active",      value: active,    color: COLORS.orange  },
+  ].filter(s=>s.value>0);
 
-  const recentRiders = [...riders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5);
+  // ── Fleet pie ────────────────────────────────────────────
+  const fleetPie = [
+    { name:"Cab",       value: drivers.filter(d=>d.vehicle_category==="cab").length,       color: COLORS.orange },
+    { name:"Truck",     value: drivers.filter(d=>d.vehicle_category==="truck").length,     color: COLORS.blue   },
+    { name:"Ambulance", value: drivers.filter(d=>d.vehicle_category==="ambulance").length, color: COLORS.red    },
+  ].filter(s=>s.value>0);
+
+  // ── Service breakdown ────────────────────────────────────
+  const svcMap: Record<string,number> = {};
+  filtBookings.forEach(b => { const s=b.service_name||"Unknown"; svcMap[s]=(svcMap[s]||0)+1; });
+  const svcData = Object.entries(svcMap).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([name,value])=>({ name, value }));
+
+  // ── Top drivers / riders ─────────────────────────────────
+  const topDrivers = [...drivers].sort((a,b)=>(b.total_rides||0)-(a.total_rides||0)).slice(0,8);
+  const riderActivity: Record<string,number> = {};
+  bookings.forEach(b => { if (b.rider_name) riderActivity[b.rider_name]=(riderActivity[b.rider_name]||0)+1; });
+  const topRiders = Object.entries(riderActivity).sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+  // ── Driver signups chart ─────────────────────────────────
+  const signupKeys = [...new Set([...Object.keys(driverSignups),...Object.keys(riderSignups)])].sort();
+  const signupData = signupKeys.map(k=>({day:k, drivers: driverSignups[k]||0, riders: riderSignups[k]||0}));
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="text-4xl mb-3">📊</div>
-          <p className="text-gray-500">Loading analytics...</p>
+      <div className="space-y-6 animate-pulse">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Array.from({length:8}).map((_,i)=><div key={i} className="h-24 bg-gray-100 rounded-2xl"/>)}
         </div>
+        <div className="h-64 bg-gray-100 rounded-2xl"/>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-        <p className="text-gray-500 text-sm mt-0.5">Full platform overview — live data</p>
+      {/* Time filter */}
+      <div className="flex items-center gap-2 bg-white border border-gray-100 shadow-sm rounded-2xl p-1 w-fit">
+        {TIME_FILTERS.map(f => (
+          <button key={f} onClick={() => setTimeF(f)}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition ${
+              timeF === f ? "bg-orange-500 text-white shadow-sm" : "text-gray-500 hover:text-gray-900"
+            }`}>
+            {f}
+          </button>
+        ))}
       </div>
 
-      {/* KPI Row 1 */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <StatCard icon="📋" label="Total Bookings"  value={bookings.length}                                                                        color="bg-blue-50"   />
-        <StatCard icon="✅" label="Completed Trips" value={completedTrips}                                                                         color="bg-green-50"  />
-        <StatCard icon="🔄" label="Active Now"      value={activeTrips}                                                                            color="bg-yellow-50" />
-        <StatCard icon="❌" label="Cancelled"       value={cancelledTrips}                                                                         color="bg-red-50"    />
-        <StatCard icon="₹" label="Total Revenue"   value={`₹${Math.round(totalRevenue).toLocaleString()}`}                                        color="bg-orange-50" />
-        <StatCard icon="💰" label="Platform Fees"  value={`₹${Math.round(platformFee).toLocaleString()}`}                                         color="bg-purple-50" />
+      {/* ── KPI Row 1 ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <KPI label="Total Bookings"   value={filtBookings.length}                  />
+        <KPI label="Completed"        value={completed}    color="text-green-600"  />
+        <KPI label="Cancelled"        value={cancelled}    color="text-red-500"    />
+        <KPI label="Active Now"       value={active}       color="text-orange-500" />
+        <KPI label="Conversion Rate"  value={`${convRate}%`}                       />
+        <KPI label="Total Revenue"    value={`₹${Math.round(revenue).toLocaleString("en-IN")}`} color="text-orange-500" />
       </div>
 
-      {/* KPI Row 2 */}
+      {/* ── KPI Row 2 ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard icon="🚗" label="Total Drivers"     value={drivers.length}                                                                       color="bg-orange-50" />
-        <StatCard icon="✔"  label="Verified Drivers"  value={verifiedDrivers}                                                                      color="bg-green-50"  />
-        <StatCard icon="🟢" label="Online Now"        value={onlineDrivers}                                                                        color="bg-green-50"  />
-        <StatCard icon="⭐" label="Avg Driver Rating" value={avgRating}                                                                            color="bg-yellow-50" />
-        <StatCard icon="👤" label="Total Riders"      value={riders.length}                                                                        color="bg-blue-50"   />
-        <StatCard icon="📈" label="Conversion Rate"   value={`${conversionRate}%`}            sub="booked → completed"                            color="bg-indigo-50" />
-        <StatCard icon="💳" label="Paid Trips"        value={payments.filter(p=>p.status==="completed").length}                                    color="bg-green-50"  />
-        <StatCard icon="🏧" label="Driver Earnings"   value={`₹${Math.round(payments.reduce((s,p)=>s+Number(p.driver_earnings||0),0)).toLocaleString()}`} color="bg-teal-50" />
+        <KPI label="Platform Commission" value={`₹${Math.round(commission).toLocaleString("en-IN")}`} color="text-orange-500" />
+        <KPI label="Total Drivers"     value={drivers.length}   />
+        <KPI label="Verified Drivers"  value={verifiedD}        color="text-green-600" />
+        <KPI label="Online Now"        value={onlineD}          color="text-green-600" />
+        <KPI label="Avg Driver Rating" value={`⭐ ${avgRating}`} />
+        <KPI label="Total Riders"      value={riders.length}    />
+        <KPI label="Paid Trips"        value={filtPayments.filter(p=>p.status==="completed").length} />
+        <KPI label="Driver Earnings"   value={`₹${Math.round(filtPayments.reduce((s,p)=>s+Number(p.driver_earnings||0),0)).toLocaleString("en-IN")}`} color="text-green-600" />
       </div>
 
-      {/* Charts Row 1 */}
+      {/* ── Trend Chart ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <h3 className="text-base font-bold text-gray-900 mb-5">Bookings & Revenue Trend</h3>
+        {trendData.length === 0 ? (
+          <div className="flex items-center justify-center h-48 text-gray-300 text-sm">No data for this period</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={240}>
+            <AreaChart data={trendData} margin={{ left:-10 }}>
+              <defs>
+                <linearGradient id="bookGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor={COLORS.orange} stopOpacity={0.15}/>
+                  <stop offset="95%" stopColor={COLORS.orange} stopOpacity={0}/>
+                </linearGradient>
+                <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor={COLORS.green} stopOpacity={0.15}/>
+                  <stop offset="95%" stopColor={COLORS.green} stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#F5F5F5" />
+              <XAxis dataKey="day" tick={{ fontSize:11, fill:"#9CA3AF" }} />
+              <YAxis yAxisId="b" tick={{ fontSize:11, fill:"#9CA3AF" }} allowDecimals={false} />
+              <YAxis yAxisId="r" orientation="right" tick={{ fontSize:11, fill:"#9CA3AF" }} tickFormatter={v=>`₹${v}`} />
+              <Tooltip content={<CHART_TOOLTIP />} />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize:12 }} />
+              <Area yAxisId="b" type="monotone" dataKey="bookings" stroke={COLORS.orange} strokeWidth={2} fill="url(#bookGrad)" name="Bookings" />
+              <Area yAxisId="r" type="monotone" dataKey="revenue"  stroke={COLORS.green}  strokeWidth={2} fill="url(#revGrad)"  name="Revenue (₹)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* ── Donut charts row ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm col-span-2">
-          <h2 className="text-gray-900 font-bold mb-4">Bookings — Last 7 Days</h2>
-          {dailyData.length > 0
-            ? <BarChart data={dailyData} color="#FF6B2B" label="Daily booking count" />
-            : <p className="text-gray-400 text-sm text-center py-8">No data yet</p>}
+        {/* Status pie */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <h3 className="text-sm font-bold text-gray-900 mb-5">Booking Status</h3>
+          {statusPie.length === 0 ? (
+            <div className="flex items-center justify-center h-32 text-gray-300 text-sm">No data</div>
+          ) : (
+            <>
+              <ResponsiveContainer width="100%" height={140}>
+                <PieChart>
+                  <Pie data={statusPie} cx="50%" cy="50%" innerRadius={45} outerRadius={65} dataKey="value" paddingAngle={2}>
+                    {statusPie.map((e,i)=><Cell key={i} fill={e.color}/>)}
+                  </Pie>
+                  <Tooltip content={<CHART_TOOLTIP />} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-1.5 mt-3">
+                {statusPie.map((s,i)=>(
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full" style={{backgroundColor:s.color}}/>
+                      <span className="text-gray-600">{s.name}</span>
+                    </div>
+                    <span className="font-bold text-gray-900">{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-          <h2 className="text-gray-900 font-bold mb-4">Booking Status</h2>
-          {statusSegments.length > 0
-            ? <DonutChart segments={statusSegments} />
-            : <p className="text-gray-400 text-sm text-center py-8">No bookings yet</p>}
+
+        {/* Fleet pie */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <h3 className="text-sm font-bold text-gray-900 mb-5">Driver Fleet</h3>
+          {fleetPie.length === 0 ? (
+            <div className="flex items-center justify-center h-32 text-gray-300 text-sm">No drivers</div>
+          ) : (
+            <>
+              <ResponsiveContainer width="100%" height={140}>
+                <PieChart>
+                  <Pie data={fleetPie} cx="50%" cy="50%" innerRadius={45} outerRadius={65} dataKey="value" paddingAngle={2}>
+                    {fleetPie.map((e,i)=><Cell key={i} fill={e.color}/>)}
+                  </Pie>
+                  <Tooltip content={<CHART_TOOLTIP />} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-1.5 mt-3">
+                {fleetPie.map((s,i)=>(
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full" style={{backgroundColor:s.color}}/>
+                      <span className="text-gray-600">{s.name}</span>
+                    </div>
+                    <span className="font-bold text-gray-900">{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Service breakdown */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <h3 className="text-sm font-bold text-gray-900 mb-5">Bookings by Service</h3>
+          {svcData.length === 0 ? (
+            <div className="flex items-center justify-center h-32 text-gray-300 text-sm">No data</div>
+          ) : (
+            <div className="space-y-2">
+              {svcData.map((s,i)=>{
+                const max = svcData[0]?.value || 1;
+                return (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-xs text-gray-600 w-24 truncate flex-shrink-0">{s.name}</span>
+                    <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-5 bg-orange-500 rounded-full" style={{width:`${(s.value/max)*100}%`}}/>
+                    </div>
+                    <span className="text-xs font-bold text-gray-900 w-6 text-right">{s.value}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Charts Row 2 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm col-span-2">
-          <h2 className="text-gray-900 font-bold mb-4">Revenue by Day</h2>
-          {revenueData.length > 0
-            ? <BarChart data={revenueData} color="#10B981" label="Revenue (₹)" />
-            : <p className="text-gray-400 text-sm text-center py-8">No payment data yet</p>}
-        </div>
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-          <h2 className="text-gray-900 font-bold mb-4">Driver Fleet</h2>
-          {categorySegments.length > 0
-            ? <DonutChart segments={categorySegments} />
-            : <p className="text-gray-400 text-sm text-center py-8">No drivers yet</p>}
-        </div>
-      </div>
-
-      {/* Bookings by service */}
-      {serviceData.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-          <h2 className="text-gray-900 font-bold mb-4">Bookings by Service Type</h2>
-          <BarChart data={serviceData} color="#3B82F6" label="Number of bookings" />
+      {/* ── Signups chart ── */}
+      {signupData.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <h3 className="text-base font-bold text-gray-900 mb-5">New Signups (Drivers & Riders)</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={signupData} margin={{left:-10}}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#F5F5F5"/>
+              <XAxis dataKey="day" tick={{fontSize:11,fill:"#9CA3AF"}}/>
+              <YAxis tick={{fontSize:11,fill:"#9CA3AF"}} allowDecimals={false}/>
+              <Tooltip content={<CHART_TOOLTIP/>}/>
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{fontSize:12}}/>
+              <Bar dataKey="drivers" fill={COLORS.orange} radius={[4,4,0,0]} name="Drivers"/>
+              <Bar dataKey="riders"  fill={COLORS.blue}   radius={[4,4,0,0]} name="Riders"/>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       )}
 
-      {/* Tables Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      {/* ── Top Tables ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Top Drivers */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h3 className="text-sm font-bold text-gray-900">Top Drivers by Rides</h3>
+          </div>
+          {topDrivers.length === 0 ? (
+            <div className="px-5 py-8 text-center text-gray-400 text-sm">No drivers yet</div>
+          ) : topDrivers.map((d,i)=>(
+            <div key={d.id} className="px-5 py-3 border-b border-gray-50 flex items-center gap-3">
+              <span className="text-xs font-bold text-gray-400 w-5">#{i+1}</span>
+              <div className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 text-xs font-bold">
+                {d.name?.[0]?.toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-900 truncate">{d.name}</p>
+                <p className="text-xs text-gray-400 capitalize">{d.vehicle_category}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs font-bold text-orange-500">{d.total_rides} rides</p>
+                <p className="text-xs text-gray-400">⭐ {Number(d.rating||0).toFixed(1)}</p>
+              </div>
+            </div>
+          ))}
+        </div>
 
         {/* Top Riders */}
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <div>
-              <h2 className="text-gray-900 font-bold">Top Riders</h2>
-              <p className="text-gray-400 text-xs mt-0.5">By number of bookings</p>
-            </div>
-            <a href="/dashboard/users" className="text-xs text-[#FF6B2B] font-semibold hover:underline">View all →</a>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h3 className="text-sm font-bold text-gray-900">Most Active Riders</h3>
           </div>
-          {topRiders.length === 0
-            ? <p className="text-gray-400 text-sm text-center py-8">No data</p>
-            : topRiders.map(([name, count], i) => (
-              <div key={name} className="px-5 py-3 flex items-center gap-3 border-b border-gray-50">
-                <span className="text-xs font-bold text-gray-400 w-5">#{i+1}</span>
-                <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-bold">
-                  {name[0]?.toUpperCase()}
-                </div>
-                <span className="flex-1 text-gray-900 text-sm font-medium truncate">{name}</span>
-                <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold">{count} trips</span>
+          {topRiders.length === 0 ? (
+            <div className="px-5 py-8 text-center text-gray-400 text-sm">No activity yet</div>
+          ) : topRiders.map(([name,count],i)=>(
+            <div key={name} className="px-5 py-3 border-b border-gray-50 flex items-center gap-3">
+              <span className="text-xs font-bold text-gray-400 w-5">#{i+1}</span>
+              <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-bold">
+                {name[0]?.toUpperCase()}
               </div>
-            ))
-          }
-        </div>
-
-        {/* Top Drivers */}
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <div>
-              <h2 className="text-gray-900 font-bold">Top Drivers</h2>
-              <p className="text-gray-400 text-xs mt-0.5">By total rides</p>
+              <span className="flex-1 text-sm font-semibold text-gray-900 truncate">{name}</span>
+              <span className="text-xs font-bold bg-blue-50 text-blue-600 px-2 py-1 rounded-full">{count} trips</span>
             </div>
-            <a href="/dashboard/drivers" className="text-xs text-[#FF6B2B] font-semibold hover:underline">View all →</a>
-          </div>
-          {topDrivers.length === 0
-            ? <p className="text-gray-400 text-sm text-center py-8">No data</p>
-            : topDrivers.map((d, i) => (
-              <div key={d.id} className="px-5 py-3 flex items-center gap-3 border-b border-gray-50">
-                <span className="text-xs font-bold text-gray-400 w-5">#{i+1}</span>
-                <div className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 text-xs font-bold">
-                  {d.name?.[0]?.toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-gray-900 text-sm font-medium truncate">{d.name}</p>
-                  <p className="text-gray-400 text-xs capitalize">{d.vehicle_category}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs font-bold text-orange-600">{d.total_rides} rides</p>
-                  <p className="text-xs text-gray-400">⭐ {Number(d.rating||0).toFixed(1)}</p>
-                </div>
-              </div>
-            ))
-          }
-        </div>
-
-        {/* Recent Signups */}
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <div>
-              <h2 className="text-gray-900 font-bold">Recent Signups</h2>
-              <p className="text-gray-400 text-xs mt-0.5">Latest riders joined</p>
-            </div>
-            <a href="/dashboard/users" className="text-xs text-[#FF6B2B] font-semibold hover:underline">View all →</a>
-          </div>
-          {recentRiders.length === 0
-            ? <p className="text-gray-400 text-sm text-center py-8">No riders yet</p>
-            : recentRiders.map(r => (
-              <div key={r.id} className="px-5 py-3 flex items-center gap-3 border-b border-gray-50">
-                <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-xs font-bold">
-                  {r.name?.[0]?.toUpperCase() || "R"}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-gray-900 text-sm font-medium truncate">{r.name || "—"}</p>
-                  <p className="text-gray-400 text-xs truncate">{r.email || r.phone || "—"}</p>
-                </div>
-                <p className="text-xs text-gray-400 flex-shrink-0">
-                  {r.created_at ? new Date(r.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"short"}) : "—"}
-                </p>
-              </div>
-            ))
-          }
+          ))}
         </div>
       </div>
-
-      {/* Recent Bookings Table */}
-      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <div>
-            <h2 className="text-gray-900 font-bold">Recent Bookings</h2>
-            <p className="text-gray-400 text-xs mt-0.5">Last 10 bookings with full details</p>
-          </div>
-          <a href="/dashboard/bookings" className="text-xs text-[#FF6B2B] font-semibold hover:underline">View all →</a>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                {["Rider","Service","Pickup","Drop","Fare","Status","Time"].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {bookings.slice(0,10).map(b => (
-                <tr key={b.id} className="hover:bg-gray-50 transition">
-                  <td className="px-4 py-3 text-sm text-gray-900 font-medium">{b.rider_name||"—"}</td>
-                  <td className="px-4 py-3 text-xs text-gray-600">{b.service_name||"—"}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500 max-w-[120px] truncate">{b.pickup_address||"—"}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500 max-w-[120px] truncate">{b.drop_address||"—"}</td>
-                  <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                    {b.final_fare ? `₹${b.final_fare}` : b.estimated_fare ? `~₹${b.estimated_fare}` : "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${
-                      b.status==="completed"   ? "bg-green-100 text-green-700"  :
-                      b.status==="cancelled"   ? "bg-red-100 text-red-700"      :
-                      b.status==="searching"   ? "bg-yellow-100 text-yellow-700":
-                      b.status==="in_progress" ? "bg-blue-100 text-blue-700"    :
-                      "bg-gray-100 text-gray-600"
-                    }`}>{b.status?.replace("_"," ")}</span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-400">
-                    {b.created_at ? new Date(b.created_at).toLocaleString("en-IN",{dateStyle:"short",timeStyle:"short"}) : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
     </div>
   );
 }
