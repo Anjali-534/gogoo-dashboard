@@ -115,6 +115,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <p className="text-[11px] text-gray-400">Master Access</p>
             </div>
           </div>
+          {/* Sub Panels */}
+          <div className="px-3 mb-2">
+            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1.5">Sub Panels</p>
+            <a
+              href="https://gogoo-cab-panel-production.up.railway.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm text-orange-500 hover:bg-orange-50 px-3 py-2 rounded-xl transition-colors font-medium"
+            >
+              <Car size={16} />
+              Cab Panel ↗
+            </a>
+          </div>
           <button
             onClick={logout}
             className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm text-red-500 hover:bg-red-50 transition font-medium"
