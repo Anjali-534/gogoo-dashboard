@@ -150,15 +150,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <ExternalLink size={11} className="text-gray-400 group-hover:text-blue-400" />
             </a>
 
-            <div className="flex items-center justify-between px-3 py-2 rounded-xl opacity-40 mb-1">
+            <a
+              href="https://gogoo-ambulance-panel-production.up.railway.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between px-3 py-2 rounded-xl hover:bg-red-50 group mb-1 transition-colors"
+            >
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 rounded-lg bg-red-100 flex items-center justify-center">
                   <span className="text-xs">🚑</span>
                 </div>
-                <span className="text-sm text-gray-400">Ambulance Panel</span>
+                <span className="text-sm font-medium text-gray-600 group-hover:text-red-600">Ambulance Panel</span>
               </div>
-              <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">Soon</span>
-            </div>
+              <ExternalLink size={11} className="text-gray-400 group-hover:text-red-400" />
+            </a>
 
             <div className="flex items-center justify-between px-3 py-2 rounded-xl opacity-40">
               <div className="flex items-center gap-2">
