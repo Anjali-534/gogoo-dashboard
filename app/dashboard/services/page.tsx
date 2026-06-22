@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { RefreshCw, X, Edit2 } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API = process.env.NEXT_PUBLIC_API_URL || "https://gogobackend-production.up.railway.app";
 
 const CATEGORY_BADGE: Record<string, string> = {
   cab:       "bg-orange-100 text-orange-700",

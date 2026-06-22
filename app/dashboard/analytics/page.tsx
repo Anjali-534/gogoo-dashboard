@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import {
@@ -7,7 +7,7 @@ import {
   ResponsiveContainer, Legend,
 } from "recharts";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API = process.env.NEXT_PUBLIC_API_URL || "https://gogobackend-production.up.railway.app";
 
 const COLORS = {
   orange: "#FF6B2B", blue: "#3B82F6", green: "#10B981",

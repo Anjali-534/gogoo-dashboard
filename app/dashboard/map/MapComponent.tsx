@@ -1,11 +1,11 @@
-"use client";
+﻿"use client";
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { RefreshCw } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API = process.env.NEXT_PUBLIC_API_URL || "https://gogobackend-production.up.railway.app";
 const REFRESH_MS = 5000;
 
 type Driver = {

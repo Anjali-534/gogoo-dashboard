@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
@@ -6,7 +6,7 @@ import { Search, Download, X, CheckCircle, Ban, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import Pagination from "../../../components/Pagination";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API = process.env.NEXT_PUBLIC_API_URL || "https://gogobackend-production.up.railway.app";
 const PER_PAGE = 50;
 
 const CATEGORY_BADGE: Record<string, string> = {

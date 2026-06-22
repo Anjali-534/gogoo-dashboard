@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 import { useEffect, useState } from "react";
 import axios from "axios";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API = process.env.NEXT_PUBLIC_API_URL || "https://gogobackend-production.up.railway.app";
 
 const SAMPLE_ENTRIES = [
   { id:1, action:"Driver verified",          actor:"admin@gogoo.in", detail:"Driver ID: abc123",           time:"2026-06-18 14:23", type:"verify"    },

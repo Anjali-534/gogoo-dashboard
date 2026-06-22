@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 import { useState, useEffect } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { Save, RefreshCw, Lock, Key } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API = process.env.NEXT_PUBLIC_API_URL || "https://gogobackend-production.up.railway.app";
 
 const DEFAULT_SETTINGS = {
   commission_percent:      20,
