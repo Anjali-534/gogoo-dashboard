@@ -6,6 +6,7 @@ import {
   LayoutDashboard, Map, BookOpen, Car, Users,
   CreditCard, BarChart2, Bell, Settings,
   Shield, MessageSquare, Layers, LogOut,
+  Truck, ExternalLink,
 } from "lucide-react";
 
 const NAV = [
@@ -118,15 +119,56 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Sub Panels */}
           <div className="px-3 mb-2">
             <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1.5">Sub Panels</p>
+
             <a
               href="https://gogoo-cab-panel-production.up.railway.app"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 text-sm text-orange-500 hover:bg-orange-50 px-3 py-2 rounded-xl transition-colors font-medium"
+              className="flex items-center justify-between px-3 py-2 rounded-xl hover:bg-orange-50 group mb-1 transition-colors"
             >
-              <Car size={16} />
-              Cab Panel ↗
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-orange-100 flex items-center justify-center">
+                  <Car size={13} className="text-orange-500" />
+                </div>
+                <span className="text-sm font-medium text-gray-600 group-hover:text-orange-600">Cab Panel</span>
+              </div>
+              <ExternalLink size={11} className="text-gray-400 group-hover:text-orange-400" />
             </a>
+
+            <a
+              href="https://gogoo-truck-panel-production.up.railway.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between px-3 py-2 rounded-xl hover:bg-blue-50 group mb-1 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-blue-100 flex items-center justify-center">
+                  <Truck size={13} className="text-blue-500" />
+                </div>
+                <span className="text-sm font-medium text-gray-600 group-hover:text-blue-600">Truck Panel</span>
+              </div>
+              <ExternalLink size={11} className="text-gray-400 group-hover:text-blue-400" />
+            </a>
+
+            <div className="flex items-center justify-between px-3 py-2 rounded-xl opacity-40 mb-1">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-red-100 flex items-center justify-center">
+                  <span className="text-xs">🚑</span>
+                </div>
+                <span className="text-sm text-gray-400">Ambulance Panel</span>
+              </div>
+              <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">Soon</span>
+            </div>
+
+            <div className="flex items-center justify-between px-3 py-2 rounded-xl opacity-40">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-purple-100 flex items-center justify-center">
+                  <span className="text-xs">🎧</span>
+                </div>
+                <span className="text-sm text-gray-400">Support Panel</span>
+              </div>
+              <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">Soon</span>
+            </div>
           </div>
           <button
             onClick={logout}

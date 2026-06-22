@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
-import { Save, RefreshCw, Lock, UserPlus } from "lucide-react";
+import { Save, RefreshCw, Lock, Key } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -38,6 +38,16 @@ function SettingRow({ label, description, name, value, onChange, unit = "", type
   );
 }
 
+type PanelUser = {
+  id: string;
+  panel_name: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+  last_login: string | null;
+};
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [saving,   setSaving]   = useState(false);
@@ -46,7 +56,43 @@ export default function SettingsPage() {
   const [newPw,    setNewPw]    = useState("");
   const [confirmPw, setConfirmPw] = useState("");
 
+  const [panelUsers,       setPanelUsers]       = useState<PanelUser[]>([]);
+  const [resetModal,       setResetModal]       = useState(false);
+  const [selectedUser,     setSelectedUser]     = useState<PanelUser | null>(null);
+  const [newPanelPw,       setNewPanelPw]       = useState("");
+
   const token = () => typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
+
+  const fetchPanelUsers = async () => {
+    try {
+      const res = await axios.get(`${API}/gogoo/admin/panel-access`, {
+        headers: { Authorization: `Bearer ${token()}` },
+      });
+      setPanelUsers(res.data.users || []);
+    } catch {}
+  };
+
+  const resetPanelPassword = async () => {
+    if (!selectedUser) return;
+    if (!newPanelPw || newPanelPw.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+    try {
+      await axios.patch(
+        `${API}/gogoo/admin/panel-access/${selectedUser.id}/password`,
+        { password: newPanelPw },
+        { headers: { Authorization: `Bearer ${token()}` } },
+      );
+      toast.success(`Password updated for ${selectedUser.email}`);
+      setResetModal(false);
+      setNewPanelPw("");
+      setSelectedUser(null);
+      fetchPanelUsers();
+    } catch {
+      toast.error("Failed to update password");
+    }
+  };
 
   useEffect(() => {
     // Try to load settings from backend, fall back to localStorage
@@ -59,6 +105,7 @@ export default function SettingsPage() {
         setSettings(prev => ({ ...prev, ...r.data }));
       }
     }).catch(() => {}).finally(() => setLoading(false));
+    fetchPanelUsers();
   }, []);
 
   const update = (name: string, value: any) => {
@@ -164,6 +211,65 @@ export default function SettingsPage() {
         {saving ? "Saving…" : "Save Settings"}
       </button>
 
+      {/* ── Panel Access ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-bold text-gray-900">Sub Panel Access</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Manage credentials for cab and truck panels</p>
+          </div>
+          <Key size={16} className="text-gray-400" />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-50">
+                {["Panel","Email","Role","Last Login","Status",""].map(h => (
+                  <th key={h} className="text-left px-5 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {panelUsers.length === 0 ? (
+                <tr><td colSpan={6} className="px-5 py-6 text-center text-sm text-gray-400">No panel users found</td></tr>
+              ) : panelUsers.map(u => (
+                <tr key={u.id} className="border-t border-gray-50 hover:bg-gray-50">
+                  <td className="px-5 py-3.5">
+                    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-semibold
+                      ${u.panel_name === "cab" ? "bg-orange-100 text-orange-700"
+                      : u.panel_name === "truck" ? "bg-blue-100 text-blue-700"
+                      : "bg-gray-100 text-gray-700"}`}>
+                      {u.panel_name === "cab" ? "🚗" : u.panel_name === "truck" ? "🚛" : "🔧"}
+                      {u.panel_name.charAt(0).toUpperCase() + u.panel_name.slice(1)}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5 text-sm text-gray-700">{u.email}</td>
+                  <td className="px-5 py-3.5 text-sm text-gray-500 capitalize">{u.role}</td>
+                  <td className="px-5 py-3.5 text-sm text-gray-500">
+                    {u.last_login ? new Date(u.last_login).toLocaleDateString("en-IN") : "Never"}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold
+                      ${u.is_active ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                      <div className={`w-1.5 h-1.5 rounded-full ${u.is_active ? "bg-green-500" : "bg-red-500"}`} />
+                      {u.is_active ? "Active" : "Disabled"}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <button
+                      onClick={() => { setSelectedUser(u); setResetModal(true); }}
+                      className="text-xs font-semibold text-orange-500 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      Reset Password
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* ── Admin Account ── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
@@ -183,6 +289,40 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
+
+      {/* ── Reset Panel Password Modal ── */}
+      {resetModal && selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm border border-gray-100">
+            <h3 className="text-base font-bold text-gray-900 mb-1">Reset Panel Password</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              Updating password for{" "}
+              <span className="font-semibold text-gray-700">{selectedUser.email}</span>
+            </p>
+            <input
+              type="password"
+              value={newPanelPw}
+              onChange={e => setNewPanelPw(e.target.value)}
+              placeholder="New password (min 8 characters)"
+              className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-400 transition mb-4"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setResetModal(false); setNewPanelPw(""); setSelectedUser(null); }}
+                className="flex-1 py-2.5 bg-gray-50 border border-gray-200 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-100 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={resetPanelPassword}
+                className="flex-1 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-bold hover:bg-orange-600 transition"
+              >
+                Update Password
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Change Password Modal ── */}
       {pwModal && (
