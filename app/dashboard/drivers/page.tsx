@@ -55,11 +55,20 @@ export default function DriversPage() {
   useEffect(() => { fetchDrivers(); }, [fetchDrivers]);
   useEffect(() => { setPage(1); }, [tab, search, ratingF, walletF]);
 
+  const DOC_STATUS_BADGE: Record<string, string> = {
+    verified:   "bg-green-100 text-green-700",
+    pending:    "bg-yellow-100 text-yellow-700",
+    rejected:   "bg-red-100 text-red-700",
+    incomplete: "bg-gray-100 text-gray-500",
+  };
+
   const filtered = drivers
     .filter(d => {
       if (tab === "pending")  return !d.is_verified;
       if (tab === "online")   return d.is_online;
       if (tab === "blocked")  return isBlocked(d);
+      if (tab === "docs")     return d.documents_status === "pending" || d.documents_status === "incomplete";
+      if (tab === "verified") return d.is_verified;
       return true;
     })
     .filter(d => {
@@ -132,9 +141,12 @@ export default function DriversPage() {
   };
 
   // stats
-  const onlineCount  = drivers.filter(d => d.is_online).length;
-  const blockedCount = drivers.filter(isBlocked).length;
-  const pendingCount = drivers.filter(d => !d.is_verified).length;
+  const onlineCount      = drivers.filter(d => d.is_online).length;
+  const blockedCount     = drivers.filter(isBlocked).length;
+  const verifiedCount    = drivers.filter(d => d.is_verified).length;
+  const pendingDocsCount = drivers.filter(d =>
+    d.documents_status === "pending" || d.documents_status === "incomplete"
+  ).length;
   const newThisWeek  = drivers.filter(d => {
     if (!d.created_at) return false;
     return (Date.now() - new Date(d.created_at).getTime()) < 7 * 86400000;
@@ -144,11 +156,11 @@ export default function DriversPage() {
     <div className="space-y-5">
       {/* ── Stats bar ── */}
       <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-        <StatPill label="Total"       value={drivers.length} />
-        <StatPill label="Online"      value={onlineCount} />
-        <StatPill label="Offline"     value={drivers.length - onlineCount} />
-        <StatPill label="Blocked"     value={blockedCount} />
-        <StatPill label="Pending Docs" value={pendingCount} />
+        <StatPill label="Total"        value={drivers.length} />
+        <StatPill label="Online"       value={onlineCount} />
+        <StatPill label="Verified"     value={verifiedCount} />
+        <StatPill label="Blocked"      value={blockedCount} />
+        <StatPill label="Pending Docs" value={pendingDocsCount} />
         <StatPill label="New This Week" value={newThisWeek} />
       </div>
 
@@ -170,12 +182,19 @@ export default function DriversPage() {
 
           {/* Status tabs */}
           <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
-            {(["all","pending","online","blocked"] as const).map(t => (
-              <button key={t} onClick={() => setTab(t)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition ${
-                  tab === t ? "bg-white text-orange-500 shadow-sm" : "text-gray-500 hover:text-gray-900"
+            {([
+              { key: "all",      label: "All" },
+              { key: "online",   label: "Online" },
+              { key: "verified", label: "Verified" },
+              { key: "pending",  label: "Unverified" },
+              { key: "docs",     label: "Pending Docs" },
+              { key: "blocked",  label: `Blocked${blockedCount > 0 ? ` (${blockedCount})` : ""}` },
+            ]).map(({ key, label }) => (
+              <button key={key} onClick={() => setTab(key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  tab === key ? "bg-white text-orange-500 shadow-sm" : "text-gray-500 hover:text-gray-900"
                 }`}>
-                {t}{t === "blocked" && blockedCount > 0 ? ` (${blockedCount})` : ""}
+                {label}
               </button>
             ))}
           </div>
@@ -230,7 +249,7 @@ export default function DriversPage() {
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {["Driver","Vehicle","Category","Rides","Rating","Wallet","Status","Actions"].map(h => (
+                {["Driver","Vehicle","Category","Rides","Rating","Wallet","Documents","Status","Actions"].map(h => (
                   <th key={h} className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -238,7 +257,7 @@ export default function DriversPage() {
             <tbody className="divide-y divide-gray-50">
               {paged.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-16 text-center">
+                  <td colSpan={9} className="px-5 py-16 text-center">
                     <div className="text-4xl mb-3">🚗</div>
                     <p className="text-base font-semibold text-gray-900 mb-1">No drivers found</p>
                     <p className="text-sm text-gray-400">Try adjusting filters</p>
@@ -279,15 +298,20 @@ export default function DriversPage() {
                       {d.is_wallet_blocked && <p className="text-[10px] text-red-400 font-semibold">Wallet Blocked</p>}
                     </td>
                     <td className="px-5 py-4">
+                      <span className={`text-[11px] font-bold px-2 py-1 rounded-full capitalize ${DOC_STATUS_BADGE[d.documents_status] || DOC_STATUS_BADGE.incomplete}`}>
+                        {d.documents_status || "incomplete"}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4">
                       {blocked ? (
                         <div>
                           <span className="text-[11px] font-bold bg-red-100 text-red-700 px-2 py-1 rounded-full">Blocked</span>
                           <p className="text-[10px] text-gray-400 mt-1">{fmtBlocked(d.blocked_until)}</p>
                         </div>
                       ) : d.is_verified ? (
-                        <span className="text-[11px] font-bold bg-green-100 text-green-700 px-2 py-1 rounded-full">Verified</span>
+                        <span className="text-[11px] font-bold bg-green-100 text-green-700 px-2 py-1 rounded-full">✓ Verified</span>
                       ) : (
-                        <span className="text-[11px] font-bold bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">Pending</span>
+                        <span className="text-[11px] font-bold bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">⏳ Pending</span>
                       )}
                     </td>
                     <td className="px-5 py-4">

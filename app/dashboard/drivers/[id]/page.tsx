@@ -58,12 +58,11 @@ export default function DriverDetailPage() {
 
   const fetchData = async () => {
     try {
-      const [driversRes, docsRes] = await Promise.all([
-        axios.get(`${API}/gogoo/drivers`, { headers }),
+      const [driverRes, docsRes] = await Promise.all([
+        axios.get(`${API}/gogoo/drivers/${id}`, { headers }),
         axios.get(`${API}/gogoo/drivers/${id}/documents`, { headers }),
       ]);
-      const d = (driversRes.data || []).find((d: any) => d.id === id);
-      setDriver(d || null);
+      setDriver(driverRes.data || null);
       setDocs(docsRes.data.docs || []);
     } catch {} finally { setLoading(false); }
   };
@@ -229,15 +228,17 @@ export default function DriverDetailPage() {
         </div>
 
         {/* Stats row */}
-        <div className="grid grid-cols-4 gap-4 mt-6 pt-6 border-t border-gray-100">
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-4 mt-6 pt-6 border-t border-gray-100">
           {[
             { label: "Rating",        value: `⭐ ${Number(driver.rating||0).toFixed(1)}` },
             { label: "Total Rides",   value: driver.total_rides || 0 },
+            { label: "Wallet Balance",value: `₹${Number(driver.wallet_balance||0).toLocaleString("en-IN")}`, red: Number(driver.wallet_balance||0) < 0 },
+            { label: "Reg Fee",       value: driver.registration_fee_paid ? "✅ Paid" : "⏳ Pending" },
             { label: "Total Earnings",value: `₹${Number(driver.total_earnings||0).toLocaleString("en-IN")}` },
             { label: "Docs Approved", value: `${approved}/${total}` },
-          ].map(s => (
+          ].map((s: any) => (
             <div key={s.label} className="text-center">
-              <p className="text-lg font-extrabold text-gray-900">{s.value}</p>
+              <p className={`text-lg font-extrabold ${s.red ? "text-red-500" : "text-gray-900"}`}>{s.value}</p>
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mt-1">{s.label}</p>
             </div>
           ))}
@@ -346,7 +347,8 @@ export default function DriverDetailPage() {
                     className="text-xs px-3 py-1.5 bg-orange-50 text-orange-500 border border-orange-200 rounded-lg hover:bg-orange-100 transition font-semibold">
                     👁 Preview
                   </button>
-                  <a href={`${API}${doc.file_url}`} target="_blank" rel="noreferrer" download
+                  <a href={doc.file_url?.startsWith("http") ? doc.file_url : `${API}${doc.file_url}`}
+                    target="_blank" rel="noreferrer" download
                     className="text-xs px-3 py-1.5 bg-blue-50 text-blue-500 border border-blue-200 rounded-lg hover:bg-blue-100 transition font-semibold">
                     📥 Download
                   </a>
@@ -490,7 +492,8 @@ export default function DriverDetailPage() {
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-bold text-gray-900">{previewDoc.label}</h4>
               <div className="flex gap-2">
-                <a href={`${API}${previewDoc.file_url}`} target="_blank" rel="noreferrer" download
+                <a href={previewDoc.file_url?.startsWith("http") ? previewDoc.file_url : `${API}${previewDoc.file_url}`}
+                  target="_blank" rel="noreferrer" download
                   className="text-xs px-3 py-1.5 bg-blue-50 text-blue-500 border border-blue-200 rounded-lg font-semibold">
                   📥 Download
                 </a>
@@ -500,10 +503,13 @@ export default function DriverDetailPage() {
               </div>
             </div>
             {previewDoc.mime_type === "application/pdf" ? (
-              <iframe src={`${API}${previewDoc.file_url}`}
+              <iframe
+                src={previewDoc.file_url?.startsWith("http") ? previewDoc.file_url : `${API}${previewDoc.file_url}`}
                 className="w-full h-[60vh] rounded-xl border border-gray-200" title={previewDoc.label} />
             ) : (
-              <img src={`${API}${previewDoc.file_url}`} alt={previewDoc.label}
+              <img
+                src={previewDoc.file_url?.startsWith("http") ? previewDoc.file_url : `${API}${previewDoc.file_url}`}
+                alt={previewDoc.label}
                 className="w-full rounded-xl border border-gray-100 object-contain max-h-[60vh]" />
             )}
             <p className="text-xs text-gray-400 mt-3 text-center">
