@@ -46,10 +46,17 @@ export default function DriversPage() {
   const token = () => (typeof window !== "undefined" ? localStorage.getItem("access_token") : "");
 
   const fetchDrivers = useCallback(async () => {
-    const res = await axios.get(`${API}/gogoo/drivers`, {
-      headers: { Authorization: `Bearer ${token()}` },
-    }).catch(() => ({ data: [] }));
-    setDrivers(res.data || []);
+    try {
+      const res = await axios.get(`${API}/gogoo/drivers`, {
+        headers: { Authorization: `Bearer ${token()}` },
+      });
+      const data = res.data;
+      const arr = Array.isArray(data) ? data : (data?.drivers || data?.data || []);
+      setDrivers(arr);
+    } catch (e: any) {
+      console.error("Failed to fetch drivers:", e?.response?.data || e?.message);
+      setDrivers([]);
+    }
   }, []);
 
   useEffect(() => { fetchDrivers(); }, [fetchDrivers]);
