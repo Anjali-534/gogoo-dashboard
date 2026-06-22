@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Map, BookOpen, Car, Users,
   CreditCard, BarChart2, Bell, Settings,
   Shield, MessageSquare, Layers, LogOut,
-  Truck, ExternalLink,
+  Truck, ExternalLink, Headphones,
 } from "lucide-react";
 
 const NAV = [
@@ -165,15 +165,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <ExternalLink size={11} className="text-gray-400 group-hover:text-red-400" />
             </a>
 
-            <div className="flex items-center justify-between px-3 py-2 rounded-xl opacity-40">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-purple-100 flex items-center justify-center">
-                  <span className="text-xs">🎧</span>
+            <a
+              href="https://gogoo-support-panel-production.up.railway.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-purple-50 group mb-1 transition-colors"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-purple-100 flex items-center justify-center">
+                  <Headphones size={14} className="text-purple-500" />
                 </div>
-                <span className="text-sm text-gray-400">Support Panel</span>
+                <span className="text-sm font-medium text-gray-600 group-hover:text-purple-600">
+                  Support Panel
+                </span>
               </div>
-              <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">Soon</span>
-            </div>
+              <ExternalLink size={12} className="text-gray-400 group-hover:text-purple-400" />
+            </a>
           </div>
           <button
             onClick={logout}
