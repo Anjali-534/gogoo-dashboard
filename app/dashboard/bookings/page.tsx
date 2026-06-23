@@ -333,6 +333,51 @@ export default function BookingsPage() {
                 </div>
               </div>
 
+              {/* Ambulance details — shown when service is ambulance */}
+              {(selected.service_category === "ambulance" || (selected.service_slug || "").startsWith("ambulance")) && (
+                <div className="mt-4 p-3 bg-green-50 rounded-xl border border-green-200">
+                  <p className="text-xs font-bold text-green-700 uppercase tracking-wider mb-2">
+                    Ambulance Details
+                  </p>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Type</span>
+                      <span className="font-semibold">
+                        {selected.is_free_ambulance ? "🆓 Free (NGO)" : "💰 Paid"}
+                      </span>
+                    </div>
+                    {selected.hospital_name && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Hospital</span>
+                        <span className="font-semibold">{selected.hospital_name}</span>
+                      </div>
+                    )}
+                    {selected.ambulance_sub_type && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Ambulance Type</span>
+                        <span className="font-semibold uppercase">{selected.ambulance_sub_type}</span>
+                      </div>
+                    )}
+                    {selected.patient_name && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Patient</span>
+                        <span className="font-semibold">{selected.patient_name}</span>
+                      </div>
+                    )}
+                    {selected.purpose_type && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Purpose</span>
+                        <span className="font-semibold capitalize">{selected.purpose_type.replace("_", " ")}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Commission</span>
+                      <span className="font-semibold text-green-600">₹0 (Zero)</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Meta */}
               <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
                 <div className="flex justify-between">
