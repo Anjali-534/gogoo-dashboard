@@ -109,9 +109,11 @@ export default function OverviewPage() {
   // ── Computed stats ──────────────────────────────────────────
   const todayBookings  = bookings.filter(b => isToday(new Date(b.created_at)));
   const activeBookings = bookings.filter(b => ["searching","accepted","arriving","in_progress"].includes(b.status));
-  const todayRevenue   = payments
-    .filter(p => p.status === "completed" && isToday(new Date(p.created_at)))
-    .reduce((s, p) => s + Number(p.amount || 0), 0);
+  const todayRevenue   = (analytics?.today_revenue != null)
+    ? Number(analytics.today_revenue)
+    : payments
+        .filter(p => p.status === "completed" && isToday(new Date(p.created_at)))
+        .reduce((s, p) => s + Number(p.amount || 0), 0);
   const todayCancelled = todayBookings.filter(b => b.status === "cancelled").length;
   const onlineDrivers  = drivers.filter(d => d.is_online).length;
   const avgRating      = drivers.length
@@ -237,7 +239,7 @@ export default function OverviewPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard icon={Activity}      label="Active Rides"    value={activeBookings.length}          color="text-orange-500"  bg="bg-orange-50" />
         <StatCard icon={Car}           label="Drivers Online"  value={onlineDrivers}                  color="text-green-500"   bg="bg-green-50"  />
-        <StatCard icon={BookOpen}      label="Bookings Today"  value={todayBookings.length}           color="text-blue-500"    bg="bg-blue-50"   />
+        <StatCard icon={BookOpen}      label="Bookings Today"  value={analytics?.today_bookings ?? todayBookings.length} color="text-blue-500"    bg="bg-blue-50"   />
         <StatCard icon={TrendingUp}    label="Revenue Today"   value={fmtINR(todayRevenue)}           color="text-orange-500"  bg="bg-orange-50" />
         <StatCard icon={XCircle}       label="Cancelled Today" value={todayCancelled}                 color="text-red-500"     bg="bg-red-50"    />
         <StatCard icon={CheckCircle}   label="Avg Rating"      value={avgRating}                      color="text-yellow-500"  bg="bg-yellow-50" />
@@ -247,7 +249,7 @@ export default function OverviewPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Total Bookings", value: bookings.length, sub: `${bookings.filter(b=>b.status==="completed").length} completed`, color: "text-blue-600", bg: "bg-blue-50", icon: BookOpen },
-          { label: "Total Revenue",  value: fmtINR(payments.filter(p=>p.status==="completed").reduce((s,p)=>s+Number(p.amount||0),0)), sub: `${payments.filter(p=>p.status==="completed").length} paid trips`, color: "text-orange-600", bg: "bg-orange-50", icon: TrendingUp },
+          { label: "Total Revenue",  value: fmtINR(analytics?.total_revenue != null ? Number(analytics.total_revenue) : payments.filter(p=>p.status==="completed").reduce((s,p)=>s+Number(p.amount||0),0)), sub: `${analytics?.total_bookings ?? bookings.filter(b=>b.status==="completed").length} completed trips`, color: "text-orange-600", bg: "bg-orange-50", icon: TrendingUp },
           { label: "Total Drivers",  value: drivers.length, sub: `${onlineDrivers} online now`, color: "text-green-600", bg: "bg-green-50", icon: Car },
           { label: "Total Riders",   value: riders.length,  sub: `${riders.filter(r=>isToday(new Date(r.created_at||0))).length} new today`, color: "text-purple-600", bg: "bg-purple-50", icon: Users },
         ].map(c => (
