@@ -264,7 +264,43 @@ export default function OverviewPage() {
         ))}
       </div>
 
-      {/* ── Row 3: Charts ── */}
+      {/* ── Row 3: App Analytics ── */}
+      <div className="space-y-3">
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+          📱 App Analytics <span className="font-normal text-gray-400 normal-case tracking-normal">· from Firebase events</span>
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {[
+            { emoji: "📱", label: "App Users Today",    value: analytics?.app_users_today ?? 0 },
+            { emoji: "🚗", label: "Bookings Started",   value: analytics?.app_bookings_started ?? 0 },
+            { emoji: "✅", label: "Bookings Completed", value: analytics?.app_bookings_completed ?? 0 },
+            { emoji: "❌", label: "Bookings Cancelled", value: analytics?.app_bookings_cancelled ?? 0 },
+            { emoji: "💥", label: "Crashes Today",      value: analytics?.app_crashes_today ?? 0 },
+          ].map(card => (
+            <div key={card.label} className="bg-white rounded-2xl border border-blue-100 shadow-sm p-5 flex items-start gap-3">
+              <span className="text-xl flex-shrink-0">{card.emoji}</span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold text-blue-400 uppercase tracking-wider mb-1">{card.label}</p>
+                <p className="text-2xl font-extrabold text-gray-900 leading-none">{card.value}</p>
+              </div>
+            </div>
+          ))}
+          <div className="bg-white rounded-2xl border border-blue-100 shadow-sm p-5 flex items-start gap-3">
+            <span className="text-xl flex-shrink-0">⭐</span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold text-blue-400 uppercase tracking-wider mb-1">Completion Rate</p>
+              <p className={`text-2xl font-extrabold leading-none ${
+                (analytics?.app_completion_rate ?? 0) >= 70 ? "text-green-600" :
+                (analytics?.app_completion_rate ?? 0) >= 50 ? "text-yellow-600" : "text-red-500"
+              }`}>
+                {(analytics?.app_completion_rate ?? 0).toFixed(1)}%
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Row 4: Charts ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Bookings Today by Hour */}
         <div className="col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
