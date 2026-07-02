@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Map, BookOpen, Car, Users,
   CreditCard, BarChart2, Bell, Settings,
   Shield, MessageSquare, Layers, LogOut,
-  Truck, ExternalLink, Headphones,
+  Truck, ExternalLink, Headphones, Gift,
 } from "lucide-react";
 
 const NAV = [
@@ -16,6 +16,7 @@ const NAV = [
   { href: "/dashboard/drivers",       icon: Car,             label: "Drivers" },
   { href: "/dashboard/users",         icon: Users,           label: "Riders" },
   { href: "/dashboard/payments",      icon: CreditCard,      label: "Payments" },
+  { href: "/dashboard/referrals",     icon: Gift,             label: "Referrals" },
   { href: "/dashboard/analytics",     icon: BarChart2,       label: "Analytics" },
   { href: "/dashboard/notifications", icon: Bell,            label: "Notifications" },
   { href: "/dashboard/services",      icon: Layers,          label: "Services" },
@@ -31,6 +32,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard/drivers":       "Drivers",
   "/dashboard/users":         "Riders",
   "/dashboard/payments":      "Payments",
+  "/dashboard/referrals":     "Referrals",
   "/dashboard/analytics":     "Analytics",
   "/dashboard/notifications": "Notifications",
   "/dashboard/services":      "Services",
