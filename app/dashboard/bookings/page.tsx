@@ -9,12 +9,19 @@ const API = process.env.NEXT_PUBLIC_API_URL || "https://gogobackend-production.u
 const PER_PAGE = 50;
 
 const STATUS_BADGE: Record<string, string> = {
+  scheduled:   "bg-sky-100 text-sky-800",
   searching:   "bg-yellow-100 text-yellow-800",
   accepted:    "bg-blue-100 text-blue-800",
   arriving:    "bg-purple-100 text-purple-800",
   in_progress: "bg-green-100 text-green-700",
   completed:   "bg-green-100 text-green-700",
   cancelled:   "bg-red-100 text-red-700",
+};
+
+const fmtDuration = (seconds: number) => {
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.floor(seconds / 60);
+  return mins < 60 ? `${mins}m ${seconds % 60}s` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
 };
 
 const SOURCE_BADGE: Record<string, string> = {
@@ -160,7 +167,7 @@ export default function BookingsPage() {
 
           {/* Status */}
           <div className="flex gap-1 bg-gray-50 border border-gray-200 rounded-xl p-1">
-            {["all","searching","in_progress","completed","cancelled"].map(s => (
+            {["all","scheduled","searching","in_progress","completed","cancelled"].map(s => (
               <button key={s} onClick={() => setFilter(s)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition capitalize ${
                   filter === s ? "bg-orange-500 text-white shadow-sm" : "text-gray-500 hover:text-gray-900"
@@ -346,6 +353,17 @@ export default function BookingsPage() {
                 </div>
               </div>
 
+              {/* Scheduled ride info */}
+              {selected.is_scheduled && selected.scheduled_at && (
+                <div className="bg-sky-50 border border-sky-100 rounded-xl p-4">
+                  <p className="text-[11px] font-bold text-sky-500 uppercase tracking-wider mb-1">Scheduled Pickup</p>
+                  <p className="text-sm text-sky-800 font-semibold">{fmtTime(selected.scheduled_at)}</p>
+                  {selected.status === "scheduled" && (
+                    <p className="text-xs text-sky-500 mt-1">Not yet dispatched — driver matching starts ~15 min before pickup</p>
+                  )}
+                </div>
+              )}
+
               {/* Ambulance details — shown when service is ambulance */}
               {(selected.service_category === "ambulance" || (selected.service_slug || "").startsWith("ambulance")) && (
                 <div className="mt-4 p-3 bg-green-50 rounded-xl border border-green-200">
@@ -414,12 +432,31 @@ export default function BookingsPage() {
               </div>
 
               {/* Cancel reason */}
-              {selected.status === "cancelled" && selected.cancel_reason && (
-                <div className="bg-red-50 border border-red-100 rounded-xl p-4">
-                  <p className="text-[11px] font-bold text-red-400 uppercase tracking-wider mb-1">Cancellation Reason</p>
-                  <p className="text-sm text-red-700">{selected.cancel_reason}</p>
-                  {selected.cancelled_by && (
-                    <p className="text-xs text-red-400 mt-1">By: {selected.cancelled_by}</p>
+              {selected.status === "cancelled" && (
+                <div className="bg-red-50 border border-red-100 rounded-xl p-4 space-y-2">
+                  {selected.cancel_reason && (
+                    <div>
+                      <p className="text-[11px] font-bold text-red-400 uppercase tracking-wider mb-1">Cancellation Reason</p>
+                      <p className="text-sm text-red-700">{selected.cancel_reason}</p>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-red-400">Cancelled by</span>
+                    <span className="font-semibold text-red-700 capitalize">{selected.cancelled_by || "—"}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-red-400">Cancellation fee</span>
+                    <span className="font-semibold text-red-700">
+                      {selected.cancellation_fee > 0 ? `₹${selected.cancellation_fee}` : "Free"}
+                    </span>
+                  </div>
+                  {selected.accepted_at && selected.cancelled_at && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-red-400">Time from accept to cancel</span>
+                      <span className="font-semibold text-red-700">
+                        {fmtDuration(Math.round((new Date(selected.cancelled_at).getTime() - new Date(selected.accepted_at).getTime()) / 1000))}
+                      </span>
+                    </div>
                   )}
                 </div>
               )}
