@@ -1,5 +1,5 @@
 ﻿"use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -20,6 +20,37 @@ const BG_STATUS_BADGE: Record<string, string> = {
   clear:     "bg-green-100 text-green-700",
   flagged:   "bg-red-100 text-red-700",
 };
+
+// Static manual-review checklist for the Background Check card. There's no
+// dedicated schema for this — per-item state is UI-only and gets encoded as
+// a plain-text "Checklist: ..." line inside background_check_notes so it
+// survives a page reload without a new column.
+const BG_CHECKLIST_ITEMS: { key: string; label: string }[] = [
+  { key: "dl_sarathi",   label: "DL verified on Sarathi" },
+  { key: "rc_vahan",     label: "RC verified on Vahan" },
+  { key: "pcc_recent",   label: "PCC within 1 year" },
+  { key: "pcc_qr",       label: "PCC QR or reference verified" },
+  { key: "names_match",  label: "Names match across docs" },
+];
+const BG_CHECKLIST_PREFIX = "Checklist:";
+
+function buildChecklistLine(checklist: Record<string, boolean>) {
+  return `${BG_CHECKLIST_PREFIX} ` + BG_CHECKLIST_ITEMS
+    .map(i => `${i.label} ${checklist[i.key] ? "✅" : "⬜"}`)
+    .join(" · ");
+}
+function parseChecklistFromNotes(notes: string): Record<string, boolean> {
+  const result: Record<string, boolean> = {};
+  BG_CHECKLIST_ITEMS.forEach(i => { result[i.key] = notes.includes(`${i.label} ✅`); });
+  return result;
+}
+function stripChecklistLine(notes: string) {
+  return notes
+    .split("\n")
+    .filter(line => !line.trim().startsWith(BG_CHECKLIST_PREFIX))
+    .join("\n")
+    .trim();
+}
 
 const RIDE_STATUS: Record<string, string> = {
   completed:   "bg-green-100 text-green-700",
@@ -63,6 +94,8 @@ export default function DriverDetailPage() {
   const [bgBusy,       setBgBusy]       = useState(false);
   const [showFlagModal, setShowFlagModal] = useState(false);
   const [flagReason,   setFlagReason]   = useState("");
+  const [checklist,    setChecklist]    = useState<Record<string, boolean>>({});
+  const notesInitRef = useRef(false);
 
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
   const headers = { Authorization: `Bearer ${token}` };
@@ -87,6 +120,21 @@ export default function DriverDetailPage() {
   };
 
   useEffect(() => { fetchData(); fetchRides(); }, [id]);
+
+  // Restore checklist + free-text notes from the saved background_check_notes
+  // once, on first load — never again, so it doesn't clobber an admin's
+  // in-progress edits after a later fetchData() (e.g. from blocking the driver).
+  useEffect(() => {
+    if (driver && !notesInitRef.current) {
+      notesInitRef.current = true;
+      const saved = driver.background_check_notes || "";
+      setChecklist(parseChecklistFromNotes(saved));
+      setBgNotes(stripChecklistLine(saved));
+    }
+  }, [driver]);
+
+  const toggleChecklistItem = (key: string) => setChecklist(c => ({ ...c, [key]: !c[key] }));
+  const allChecklistDone = BG_CHECKLIST_ITEMS.every(i => checklist[i.key]);
 
   const reviewDoc = async (docType: string, status: string) => {
     if (status === "rejected" && !rejectReason.trim()) {
@@ -131,8 +179,10 @@ export default function DriverDetailPage() {
   };
 
   const markBackgroundClear = () => {
+    if (!allChecklistDone) return;
     if (!confirm("Mark this driver's background check as clear?")) return;
-    updateBackgroundCheck("clear", bgNotes);
+    const combinedNotes = [buildChecklistLine(checklist), bgNotes.trim()].filter(Boolean).join("\n\n");
+    updateBackgroundCheck("clear", combinedNotes);
   };
 
   const unblockDriver = async () => {
@@ -449,14 +499,32 @@ export default function DriverDetailPage() {
           </p>
         )}
         {driver.background_check_notes && (
-          <p className="text-xs text-gray-600 bg-gray-50 border border-gray-100 rounded-xl p-3 mb-3">{driver.background_check_notes}</p>
+          <p className="text-xs text-gray-600 bg-gray-50 border border-gray-100 rounded-xl p-3 mb-3 whitespace-pre-wrap">{driver.background_check_notes}</p>
         )}
+
+        {/* Manual verification checklist — UI-only, encoded into notes on save */}
+        <div className="border border-gray-100 rounded-xl p-3 mb-3 space-y-2">
+          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Verification Checklist</p>
+          {BG_CHECKLIST_ITEMS.map(item => (
+            <label key={item.key} className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={!!checklist[item.key]}
+                onChange={() => toggleChecklistItem(item.key)}
+                className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 flex-shrink-0"
+              />
+              <span className={`text-sm ${checklist[item.key] ? "text-gray-700" : "text-gray-500"}`}>{item.label}</span>
+            </label>
+          ))}
+        </div>
+
         <textarea value={bgNotes} onChange={e => setBgNotes(e.target.value)}
           placeholder="Notes…" rows={2}
           className="w-full text-sm px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none resize-none mb-3" />
         <div className="flex gap-2">
-          <button onClick={markBackgroundClear} disabled={bgBusy}
-            className="flex-1 py-2 bg-green-50 text-green-600 border border-green-200 rounded-xl text-sm font-bold hover:bg-green-100 transition disabled:opacity-50">
+          <button onClick={markBackgroundClear} disabled={bgBusy || !allChecklistDone}
+            title={!allChecklistDone ? "Complete the verification checklist first" : undefined}
+            className="flex-1 py-2 bg-green-50 text-green-600 border border-green-200 rounded-xl text-sm font-bold hover:bg-green-100 transition disabled:opacity-50 disabled:cursor-not-allowed">
             ✓ Mark Clear
           </button>
           <button onClick={() => setShowFlagModal(true)} disabled={bgBusy}
