@@ -14,6 +14,13 @@ const DOC_STATUS: Record<string, string> = {
   missing:  "bg-gray-100 text-gray-500",
 };
 
+const BG_STATUS_BADGE: Record<string, string> = {
+  pending:   "bg-yellow-100 text-yellow-700",
+  in_review: "bg-blue-100 text-blue-700",
+  clear:     "bg-green-100 text-green-700",
+  flagged:   "bg-red-100 text-red-700",
+};
+
 const RIDE_STATUS: Record<string, string> = {
   completed:   "bg-green-100 text-green-700",
   cancelled:   "bg-red-100 text-red-700",
@@ -52,6 +59,10 @@ export default function DriverDetailPage() {
   const [blockBusy,   setBlockBusy]   = useState(false);
   const [notifMsg,    setNotifMsg]    = useState("");
   const [notifSending, setNotifSending] = useState(false);
+  const [bgNotes,      setBgNotes]      = useState("");
+  const [bgBusy,       setBgBusy]       = useState(false);
+  const [showFlagModal, setShowFlagModal] = useState(false);
+  const [flagReason,   setFlagReason]   = useState("");
 
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
   const headers = { Authorization: `Bearer ${token}` };
@@ -98,7 +109,30 @@ export default function DriverDetailPage() {
       await axios.patch(`${API}/gogoo/drivers/${id}/verify`, {}, { headers });
       toast.success("Driver verified successfully");
       fetchData();
-    } catch { toast.error("Failed to verify driver"); }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || "Failed to verify driver");
+    }
+  };
+
+  const updateBackgroundCheck = async (status: string, notes: string) => {
+    setBgBusy(true);
+    try {
+      await axios.patch(`${API}/gogoo/drivers/${id}/background-check`, { status, notes }, { headers });
+      toast.success(
+        status === "clear" ? "Background check marked clear" :
+        status === "flagged" ? "Driver flagged" : "Background check status updated"
+      );
+      setShowFlagModal(false);
+      setFlagReason("");
+      fetchData();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error || "Failed to update background check");
+    } finally { setBgBusy(false); }
+  };
+
+  const markBackgroundClear = () => {
+    if (!confirm("Mark this driver's background check as clear?")) return;
+    updateBackgroundCheck("clear", bgNotes);
   };
 
   const unblockDriver = async () => {
@@ -128,6 +162,7 @@ export default function DriverDetailPage() {
 
   const sendNotification = async () => {
     if (!notifMsg.trim()) { toast.error("Enter a message"); return; }
+    if (!driver?.user_id) { toast.error("Cannot identify this driver's account"); return; }
     setNotifSending(true);
     try {
       await axios.post(`${API}/gogoo/admin/notifications`, {
@@ -135,8 +170,9 @@ export default function DriverDetailPage() {
         body: notifMsg,
         type: "general",
         target_audience: "drivers",
+        target_user_id: driver.user_id,
       }, { headers });
-      toast.success("Notification sent to driver");
+      toast.success("Notification sent to this driver only");
       setNotifMsg("");
     } catch { toast.error("Failed to send notification"); }
     finally { setNotifSending(false); }
@@ -395,6 +431,41 @@ export default function DriverDetailPage() {
         </div>
       </div>
 
+      {/* ── Background Check (MVAG) ── */}
+      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-bold text-gray-900">Background Check</h3>
+          <span className={`text-xs font-bold px-2.5 py-1 rounded-full capitalize ${BG_STATUS_BADGE[driver.background_check_status] || BG_STATUS_BADGE.pending}`}>
+            {driver.background_check_status || "pending"}
+          </span>
+        </div>
+        <p className="text-xs text-gray-400 mb-3">
+          Verify DL number on parivahan.gov.in (Sarathi) and RC on Vahan manually. Confirm PCC is genuine and recent (within 1 year).
+        </p>
+        {driver.background_checked_by && (
+          <p className="text-xs text-gray-400 mb-3">
+            Last reviewed by {driver.background_checked_by}
+            {driver.background_checked_at ? ` on ${fmtDate(driver.background_checked_at)}` : ""}
+          </p>
+        )}
+        {driver.background_check_notes && (
+          <p className="text-xs text-gray-600 bg-gray-50 border border-gray-100 rounded-xl p-3 mb-3">{driver.background_check_notes}</p>
+        )}
+        <textarea value={bgNotes} onChange={e => setBgNotes(e.target.value)}
+          placeholder="Notes…" rows={2}
+          className="w-full text-sm px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none resize-none mb-3" />
+        <div className="flex gap-2">
+          <button onClick={markBackgroundClear} disabled={bgBusy}
+            className="flex-1 py-2 bg-green-50 text-green-600 border border-green-200 rounded-xl text-sm font-bold hover:bg-green-100 transition disabled:opacity-50">
+            ✓ Mark Clear
+          </button>
+          <button onClick={() => setShowFlagModal(true)} disabled={bgBusy}
+            className="flex-1 py-2 bg-red-50 text-red-500 border border-red-200 rounded-xl text-sm font-bold hover:bg-red-100 transition disabled:opacity-50">
+            🚩 Flag
+          </button>
+        </div>
+      </div>
+
       {/* ── Ride History ── */}
       <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -482,6 +553,32 @@ export default function DriverDetailPage() {
           </button>
         </div>
       </div>
+
+      {/* ── Flag Background Check Modal ── */}
+      {showFlagModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-lg font-bold text-gray-900">Flag Driver</h3>
+            <p className="text-sm text-orange-600 font-medium">
+              This immediately un-verifies the driver — they cannot go online until the flag is cleared.
+            </p>
+            <textarea className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-500"
+              rows={3} placeholder="Reason for flagging (required)..."
+              value={flagReason} onChange={e => setFlagReason(e.target.value)} />
+            <div className="flex gap-3">
+              <button onClick={() => { setShowFlagModal(false); setFlagReason(""); }}
+                className="flex-1 border border-gray-200 rounded-xl py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+                Cancel
+              </button>
+              <button onClick={() => updateBackgroundCheck("flagged", flagReason)}
+                disabled={bgBusy || !flagReason.trim()}
+                className="flex-1 bg-red-600 text-white rounded-xl py-2 text-sm font-medium hover:bg-red-700 disabled:opacity-50">
+                Flag Driver
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Preview Modal ── */}
       {previewDoc && (

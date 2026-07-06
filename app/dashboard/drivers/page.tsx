@@ -76,6 +76,7 @@ export default function DriversPage() {
       if (tab === "blocked")  return isBlocked(d);
       if (tab === "docs")     return d.documents_status === "pending" || d.documents_status === "incomplete";
       if (tab === "verified") return d.is_verified;
+      if (tab === "awaiting_bgv") return d.is_verified && d.background_check_status !== "clear";
       return true;
     })
     .filter(d => {
@@ -154,6 +155,9 @@ export default function DriversPage() {
   const pendingDocsCount = drivers.filter(d =>
     d.documents_status === "pending" || d.documents_status === "incomplete"
   ).length;
+  const awaitingBGVCount = drivers.filter(d =>
+    d.is_verified && d.background_check_status !== "clear"
+  ).length;
   const newThisWeek  = drivers.filter(d => {
     if (!d.created_at) return false;
     return (Date.now() - new Date(d.created_at).getTime()) < 7 * 86400000;
@@ -195,6 +199,7 @@ export default function DriversPage() {
               { key: "verified", label: "Verified" },
               { key: "pending",  label: "Unverified" },
               { key: "docs",     label: "Pending Docs" },
+              { key: "awaiting_bgv", label: `Awaiting BGV${awaitingBGVCount > 0 ? ` (${awaitingBGVCount})` : ""}` },
               { key: "blocked",  label: `Blocked${blockedCount > 0 ? ` (${blockedCount})` : ""}` },
             ]).map(({ key, label }) => (
               <button key={key} onClick={() => setTab(key)}

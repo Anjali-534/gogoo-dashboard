@@ -17,6 +17,11 @@ const STATUS_BADGE: Record<string, string> = {
   cancelled:   "bg-red-100 text-red-700",
 };
 
+const SOURCE_BADGE: Record<string, string> = {
+  app:     "bg-indigo-100 text-indigo-800",
+  website: "bg-teal-100 text-teal-800",
+};
+
 const fmtTime = (iso: string) =>
   new Date(iso).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" });
 
@@ -81,12 +86,12 @@ export default function BookingsPage() {
 
   const exportCSV = () => {
     const rows = [
-      ["ID","Rider","Driver","Service","Pickup","Drop","Fare","Status","Date"],
+      ["ID","Rider","Driver","Service","Pickup","Drop","Fare","Status","Source","Date"],
       ...filtered.map(b => [
         b.id, b.rider_name, b.driver_name || "",
         b.service_name, b.pickup_address, b.drop_address,
         b.final_fare || b.estimated_fare || "",
-        b.status, b.created_at,
+        b.status, b.source === "website" ? "Website" : "App", b.created_at,
       ]),
     ];
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
@@ -173,7 +178,7 @@ export default function BookingsPage() {
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {["Booking ID","Rider","Driver","Service","Route","Fare","Status","Date"].map(h => (
+                {["Booking ID","Rider","Driver","Service","Route","Fare","Status","Source","Date"].map(h => (
                   <th key={h} className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -182,7 +187,7 @@ export default function BookingsPage() {
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    {Array.from({ length: 8 }).map((_, j) => (
+                    {Array.from({ length: 9 }).map((_, j) => (
                       <td key={j} className="px-5 py-4">
                         <div className="h-3 bg-gray-100 rounded w-3/4" />
                       </td>
@@ -191,7 +196,7 @@ export default function BookingsPage() {
                 ))
               ) : paged.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-16 text-center">
+                  <td colSpan={9} className="px-5 py-16 text-center">
                     <div className="text-4xl mb-3">📭</div>
                     <p className="text-base font-semibold text-gray-900 mb-1">No bookings found</p>
                     <p className="text-sm text-gray-400">Try adjusting your filters</p>
@@ -215,6 +220,11 @@ export default function BookingsPage() {
                   <td className="px-5 py-4">
                     <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full capitalize ${STATUS_BADGE[b.status] || "bg-gray-100 text-gray-600"}`}>
                       {b.status?.replace("_"," ")}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4">
+                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${SOURCE_BADGE[b.source] || "bg-indigo-100 text-indigo-800"}`}>
+                      {b.source === "website" ? "Website" : "App"}
                     </span>
                   </td>
                   <td className="px-5 py-4 text-xs text-gray-400">{fmtTime(b.created_at)}</td>
@@ -242,9 +252,12 @@ export default function BookingsPage() {
                   <X size={18} className="text-gray-500" />
                 </button>
               </div>
-              <div className="mt-3">
+              <div className="mt-3 flex items-center gap-2">
                 <span className={`text-xs font-bold px-3 py-1.5 rounded-full capitalize ${STATUS_BADGE[selected.status] || "bg-gray-100 text-gray-600"}`}>
                   {selected.status?.replace("_"," ")}
+                </span>
+                <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${SOURCE_BADGE[selected.source] || "bg-indigo-100 text-indigo-800"}`}>
+                  {selected.source === "website" ? "Website" : "App"}
                 </span>
               </div>
             </div>
