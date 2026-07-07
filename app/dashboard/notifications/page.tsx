@@ -120,20 +120,103 @@ function PersonSearch({ audience, selected, onSelect }: {
   );
 }
 
+function MultiPersonSearch({ audience, selected, onChange }: {
+  audience: "drivers"|"riders";
+  selected: Person[];
+  onChange: (people: Person[]) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [all, setAll] = useState<Person[]>([]);
+  const [loading, setLoading] = useState(false);
+  const loadedRef = useRef(false);
+
+  const loadPeople = async () => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      const endpoint = audience === "drivers" ? "/gogoo/drivers" : "/gogoo/riders";
+      const res = await axios.get(`${API}${endpoint}`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = res.data;
+      const arr: Person[] = Array.isArray(data) ? data : (data?.drivers || data?.data || []);
+      setAll(arr.filter(p => p.user_id));
+    } catch { setAll([]); }
+    finally { setLoading(false); }
+  };
+
+  const q = query.trim().toLowerCase();
+  const matches = q.length === 0 ? [] : all.filter(p =>
+    p.name?.toLowerCase().includes(q) || p.phone?.includes(q)
+  ).slice(0, 8);
+
+  const isSelected = (p: Person) => selected.some(s => s.user_id === p.user_id);
+  const toggle = (p: Person) => {
+    if (isSelected(p)) onChange(selected.filter(s => s.user_id !== p.user_id));
+    else onChange([...selected, p]);
+  };
+
+  return (
+    <div className="mb-3">
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {selected.map(p => (
+            <span key={p.user_id} className="inline-flex items-center gap-1 bg-orange-50 border border-orange-200 rounded-full pl-2.5 pr-1 py-1 text-xs font-semibold text-orange-700">
+              {p.name || "Unnamed"}
+              <button type="button" onClick={() => toggle(p)} className="p-0.5 hover:bg-orange-100 rounded-full">
+                <X size={10}/>
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="relative">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          value={query}
+          onFocus={loadPeople}
+          onChange={e => { setQuery(e.target.value); loadPeople(); }}
+          placeholder={`Search ${audience === "drivers" ? "drivers" : "riders"} to add…`}
+          className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-orange-400 transition"
+        />
+      </div>
+      {q.length > 0 && (
+        <div className="mt-1 bg-white border border-gray-100 rounded-xl shadow-sm max-h-56 overflow-y-auto">
+          {loading ? (
+            <p className="px-4 py-3 text-xs text-gray-400">Loading…</p>
+          ) : matches.length === 0 ? (
+            <p className="px-4 py-3 text-xs text-gray-400">No match found</p>
+          ) : matches.map(p => (
+            <label key={p.id}
+              className="flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-orange-50 border-b border-gray-50 last:border-0 cursor-pointer">
+              <input type="checkbox" checked={isSelected(p)} onChange={() => toggle(p)}
+                className="accent-orange-500" />
+              <span className="font-medium text-gray-800">{p.name || "Unnamed"}</span>
+              {p.phone && <span className="text-xs text-gray-400 ml-auto">{p.phone}</span>}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ComposeForm({ audience, onSent }: { audience: "drivers"|"riders"; onSent: () => void }) {
   const [form,    setForm]    = useState(emptyForm());
   const [sending, setSending] = useState(false);
   // Broadcast is never the default silently — the admin must explicitly
-  // switch to "Specific person" to narrow a send to one recipient.
-  const [mode, setMode] = useState<"broadcast" | "specific">("broadcast");
+  // switch modes to narrow a send to specific recipients.
+  const [mode, setMode] = useState<"broadcast" | "specific" | "multi">("broadcast");
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
+  const [selectedPeople, setSelectedPeople] = useState<Person[]>([]);
   const meta = AUDIENCE_META[audience];
 
   const update = (k: string, v: string) => setForm(f => ({...f, [k]: v}));
 
-  const switchMode = (m: "broadcast" | "specific") => {
+  const switchMode = (m: "broadcast" | "specific" | "multi") => {
     setMode(m);
     setSelectedPerson(null);
+    setSelectedPeople([]);
   };
 
   const send = async (e: React.FormEvent) => {
@@ -146,6 +229,10 @@ function ComposeForm({ audience, onSent }: { audience: "drivers"|"riders"; onSen
       toast.error(`Search and select a ${audience === "drivers" ? "driver" : "rider"} first`);
       return;
     }
+    if (mode === "multi" && selectedPeople.length === 0) {
+      toast.error(`Select at least one ${audience === "drivers" ? "driver" : "rider"}`);
+      return;
+    }
     setSending(true);
     try {
       const token = localStorage.getItem("access_token");
@@ -154,12 +241,18 @@ function ComposeForm({ audience, onSent }: { audience: "drivers"|"riders"; onSen
           ...form,
           target_audience: audience,
           ...(mode === "specific" ? { target_user_id: selectedPerson!.user_id } : {}),
+          ...(mode === "multi" ? { target_user_ids: selectedPeople.map(p => p.user_id) } : {}),
         },
         { headers: { Authorization: `Bearer ${token}` } },
       );
-      toast.success(mode === "specific" ? `Message sent to ${selectedPerson!.name}` : `Broadcast sent to ${meta.label}!`);
+      toast.success(
+        mode === "specific" ? `Message sent to ${selectedPerson!.name}` :
+        mode === "multi" ? `Message sent to ${selectedPeople.length} selected ${meta.label.toLowerCase()}` :
+        `Broadcast sent to ${meta.label}!`
+      );
       setForm(emptyForm());
       setSelectedPerson(null);
+      setSelectedPeople([]);
       onSent();
     } catch (e: any) {
       toast.error(e?.response?.data?.error || "Failed to send. Try again.");
@@ -186,10 +279,19 @@ function ComposeForm({ audience, onSent }: { audience: "drivers"|"riders"; onSen
           }`}>
           Specific person
         </button>
+        <button type="button" onClick={() => switchMode("multi")}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${
+            mode === "multi" ? "bg-gray-900 text-white" : "text-gray-500 hover:text-gray-800"
+          }`}>
+          Select people
+        </button>
       </div>
 
       {mode === "specific" && (
         <PersonSearch audience={audience} selected={selectedPerson} onSelect={setSelectedPerson} />
+      )}
+      {mode === "multi" && (
+        <MultiPersonSearch audience={audience} selected={selectedPeople} onChange={setSelectedPeople} />
       )}
 
       {/* Type chips */}
@@ -225,7 +327,7 @@ function ComposeForm({ audience, onSent }: { audience: "drivers"|"riders"; onSen
         placeholder="Link URL (optional)"
         className="w-full px-4 py-2.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-orange-400 transition mb-4" />
 
-      <button type="submit" disabled={sending || (mode === "specific" && !selectedPerson)}
+      <button type="submit" disabled={sending || (mode === "specific" && !selectedPerson) || (mode === "multi" && selectedPeople.length === 0)}
         style={{ backgroundColor: meta.color }}
         className="w-full flex items-center justify-center gap-2 text-white font-bold py-2.5 rounded-xl text-sm disabled:opacity-50 transition hover:opacity-90">
         {sending ? (
@@ -234,7 +336,10 @@ function ComposeForm({ audience, onSent }: { audience: "drivers"|"riders"; onSen
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
           </svg>
         ) : <Send size={15}/>}
-        {sending ? "Sending…" : mode === "specific" ? `Send to ${selectedPerson?.name || "…"}` : `Send to ${meta.label}`}
+        {sending ? "Sending…" :
+          mode === "specific" ? `Send to ${selectedPerson?.name || "…"}` :
+          mode === "multi" ? `Send to ${selectedPeople.length || ""} selected` :
+          `Send to ${meta.label}`}
       </button>
     </form>
   );
@@ -259,6 +364,8 @@ function BroadcastCard({ item, onDiscontinue }: { item: any; onDiscontinue: (id:
             </span>
             {item.target_user_id ? (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">1:1</span>
+            ) : item.target_user_ids?.length > 0 ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">{item.target_user_ids.length} selected</span>
             ) : (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">broadcast</span>
             )}
