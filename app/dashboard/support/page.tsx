@@ -35,9 +35,9 @@ export default function SupportPage() {
           A full support ticket system is coming soon. For now, you can reach out to riders and drivers
           directly or manage issues through bookings.
         </p>
-        <a href="mailto:support@gogoo.in"
+        <a href="mailto:support@bogie.in"
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-bold hover:bg-orange-600 transition">
-          📧 Email: support@gogoo.in
+          📧 Email: support@bogie.in
         </a>
       </div>
 
