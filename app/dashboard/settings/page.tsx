@@ -162,7 +162,7 @@ export default function SettingsPage() {
           <p className="text-xs text-gray-400 mt-0.5">Controls fare calculation and platform revenue</p>
         </div>
         <div className="px-6">
-          <SettingRow label="Platform Commission" description="% of fare collected by gogoo" name="commission_percent" value={settings.commission_percent} onChange={update} unit="%" />
+          <SettingRow label="Platform Commission" description="% of fare collected by bogie" name="commission_percent" value={settings.commission_percent} onChange={update} unit="%" />
           <SettingRow label="Surge Multiplier"    description="Global fare multiplier (1.0 = normal)" name="surge_multiplier" value={settings.surge_multiplier} onChange={update} />
           <SettingRow label="Registration Fee"    description="One-time fee charged to new drivers" name="registration_fee" value={settings.registration_fee} onChange={update} unit="₹" />
           <SettingRow label="Cancellation Fee"    description="Fee charged for cancellations after acceptance" name="cancellation_fee" value={settings.cancellation_fee} onChange={update} unit="₹" />

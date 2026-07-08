@@ -47,7 +47,7 @@ export default function LoginPage() {
               <path d="M12 2L3 7l9 5 9-5-9-5zM3 17l9 5 9-5M3 12l9 5 9-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </div>
-          <h1 className="text-4xl font-black text-white tracking-tight">gogoo</h1>
+          <h1 className="text-4xl font-black text-white tracking-tight">bogie</h1>
           <p className="text-[13px] text-gray-400 mt-1.5 font-medium tracking-wider uppercase">Master Panel</p>
         </div>
 
@@ -104,7 +104,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-gray-600 mt-6">
-          gogoo · Aggarwal Publicity and Marketing Pvt. Ltd.
+          bogie · Aggarwal Publicity and Marketing Pvt. Ltd.
         </p>
       </div>
     </div>

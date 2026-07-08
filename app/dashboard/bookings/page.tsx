@@ -341,7 +341,7 @@ export default function BookingsPage() {
                         <span className="font-bold text-lg text-gray-900">₹{selected.final_fare}</span>
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span className="text-gray-400">gogoo Commission (20%)</span>
+                        <span className="text-gray-400">bogie Commission (20%)</span>
                         <span className="text-orange-500 font-semibold">₹{Math.round(selected.final_fare * 0.2)}</span>
                       </div>
                       <div className="flex justify-between text-xs">

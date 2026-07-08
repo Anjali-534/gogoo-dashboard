@@ -73,7 +73,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <span className="text-white font-black text-sm">G</span>
             </div>
             <div>
-              <span className="text-gray-900 font-bold text-base tracking-tight">gogoo</span>
+              <span className="text-gray-900 font-bold text-base tracking-tight">bogie</span>
               <div className="mt-0.5">
                 <span className="text-[10px] font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full tracking-wider uppercase">
                   Master Panel

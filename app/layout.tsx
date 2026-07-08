@@ -3,8 +3,8 @@ import { Toaster } from "react-hot-toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "gogoo Master Panel",
-  description: "gogoo Operations Master Control Panel",
+  title: "bogie Master Panel",
+  description: "bogie Operations Master Control Panel",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

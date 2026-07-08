@@ -157,7 +157,7 @@ export default function RidersPage() {
                     <p className="text-base font-semibold text-gray-900 mb-1">
                       {search ? "No riders match your search" : "No riders yet"}
                     </p>
-                    <p className="text-sm text-gray-400">Riders appear after signing up through the gogoo app</p>
+                    <p className="text-sm text-gray-400">Riders appear after signing up through the bogie app</p>
                   </td>
                 </tr>
               ) : paged.map(r => (
