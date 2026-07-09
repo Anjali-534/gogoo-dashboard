@@ -360,6 +360,8 @@ export default function DriverDetailPage() {
             <Field label="Full Name" value={driver.name} />
             <Field label="Email" value={driver.email} />
             <Field label="Phone Number" value={driver.phone} />
+            <Field label="Date of Birth" value={driver.date_of_birth ? new Date(driver.date_of_birth).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : null} />
+            <Field label="Address" value={driver.address} />
           </FieldSection>
 
           <FieldSection title="Vehicle Information">
@@ -400,9 +402,12 @@ export default function DriverDetailPage() {
             <Field label="Last Location Update" value={driver.location_updated_at ? fmtDate(driver.location_updated_at) : null} />
           </FieldSection>
         </div>
-        <p className="text-xs text-gray-400 mt-5 pt-4 border-t border-gray-100">
-          KYC documents are reviewed in the Documents section below — this card covers everything else collected at signup.
-        </p>
+        <button
+          onClick={() => document.getElementById("documents-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          className="w-full text-left text-xs text-orange-500 hover:text-orange-600 font-semibold mt-5 pt-4 border-t border-gray-100 transition"
+        >
+          📄 KYC documents are reviewed in the Documents section below →
+        </button>
       </div>
 
       {/* ── Block / Unblock ── */}
@@ -471,7 +476,7 @@ export default function DriverDetailPage() {
       </div>
 
       {/* ── Documents ── */}
-      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+      <div id="documents-section" className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
           <h3 className="text-base font-bold text-gray-900">Documents</h3>
         </div>
