@@ -1,6 +1,7 @@
 ﻿"use client";
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { ScrollBody } from "../../../components/TableControls";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://gogobackend-production.up.railway.app";
 
@@ -79,9 +80,11 @@ export default function AuditLogPage() {
             <p className="text-sm">No audit entries yet</p>
           </div>
         ) : (
+          <ScrollBody maxHeight="600px">
           <div className="divide-y divide-gray-50">
             {auditLogs.map((entry, i) => (
               <div key={entry.id || i} className="px-6 py-4 flex items-center gap-4">
+                <span className="text-xs font-medium text-gray-400 w-5 flex-shrink-0">{i + 1}</span>
                 <span className="text-xl flex-shrink-0">{TYPE_ICON[entry.type] || "📌"}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
@@ -99,6 +102,7 @@ export default function AuditLogPage() {
               </div>
             ))}
           </div>
+          </ScrollBody>
         )}
       </div>
 

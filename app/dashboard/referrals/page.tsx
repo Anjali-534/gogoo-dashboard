@@ -4,6 +4,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { Search, Download, X, RefreshCw, ChevronRight, ChevronDown, List, GitBranch } from "lucide-react";
 import Pagination from "../../../components/Pagination";
+import { DateRangeFilter, SortToggle, ScrollBody, rangeToParams, type DateRangeValue, type SortDir } from "../../../components/TableControls";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://gogobackend-production.up.railway.app";
 const PER_PAGE = 50;
@@ -207,6 +208,8 @@ export default function ReferralsPage() {
   const [view, setView] = useState<"table" | "chain">("table");
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
+  const [dateRange, setDateRange] = useState<DateRangeValue>({ range: "all_time" });
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [page, setPage] = useState(1);
   const hasLoadedOnce = useRef(false);
 
@@ -217,6 +220,7 @@ export default function ReferralsPage() {
     try {
       const res = await axios.get(`${API}/gogoo/referral/all`, {
         headers: { Authorization: `Bearer ${token()}` },
+        params: { ...rangeToParams(dateRange), sort: sortDir },
       });
       const data = res.data;
       const list = Array.isArray(data) ? data : (data?.referrals || []);
@@ -244,7 +248,7 @@ export default function ReferralsPage() {
     return () => clearInterval(interval);
   }, [fetchRows]);
 
-  useEffect(() => { setPage(1); }, [tab, search]);
+  useEffect(() => { setPage(1); }, [tab, search, dateRange, sortDir]);
 
   const filtered = rows
     .filter(r => {
@@ -330,6 +334,7 @@ export default function ReferralsPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <SortToggle value={sortDir} onChange={setSortDir} />
           <button onClick={() => fetchRows()} className="p-2 hover:bg-gray-100 rounded-xl text-gray-400">
             <RefreshCw size={16} />
           </button>
@@ -339,6 +344,9 @@ export default function ReferralsPage() {
           </button>
         </div>
       </div>
+
+      {/* ── Date range filter ── */}
+      <DateRangeFilter value={dateRange} onChange={setDateRange} />
 
       {loading ? (
         <TableSkeleton />
@@ -351,11 +359,11 @@ export default function ReferralsPage() {
       ) : view === "table" ? (
         /* ── Table ── */
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
+          <ScrollBody>
             <table className="w-full">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  {["Referrer", "Referred", "Type", "Level", "Amount", "Status", "Signup Date", "Credited Date"].map(h => (
+                  {["#","Referrer", "Referred", "Type", "Level", "Amount", "Status", "Signup Date", "Credited Date"].map(h => (
                     <th key={h} className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
@@ -363,14 +371,15 @@ export default function ReferralsPage() {
               <tbody className="divide-y divide-gray-50">
                 {paged.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-5 py-16 text-center">
+                    <td colSpan={9} className="px-5 py-16 text-center">
                       <div className="text-4xl mb-3">🔍</div>
                       <p className="text-base font-semibold text-gray-900 mb-1">No referrals found</p>
                       <p className="text-sm text-gray-400">Try adjusting filters</p>
                     </td>
                   </tr>
-                ) : paged.map(r => (
+                ) : paged.map((r, i) => (
                   <tr key={r.id} className="hover:bg-gray-50 transition">
+                    <td className="px-5 py-4 text-sm text-gray-400 font-medium">{(page - 1) * PER_PAGE + i + 1}</td>
                     <td className="px-5 py-4">
                       <p className="text-sm font-semibold text-gray-900">{r.referrer_name || "—"}</p>
                       <p className="text-xs text-gray-400 flex items-center gap-1.5">
@@ -404,7 +413,7 @@ export default function ReferralsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollBody>
           <Pagination page={page} total={filtered.length} perPage={PER_PAGE} onChange={setPage} />
         </div>
       ) : (
@@ -417,7 +426,9 @@ export default function ReferralsPage() {
                 : "Click a referrer to expand who they referred, including chain bonuses earned via their referrals."}
             </p>
           </div>
-          <ChainList rootCodes={chain.rootCodes} childrenByCode={chain.childrenByCode} grandchildrenByCode={chain.grandchildrenByCode} nodeInfo={chain.nodeInfo} />
+          <ScrollBody>
+            <ChainList rootCodes={chain.rootCodes} childrenByCode={chain.childrenByCode} grandchildrenByCode={chain.grandchildrenByCode} nodeInfo={chain.nodeInfo} />
+          </ScrollBody>
         </div>
       )}
     </div>

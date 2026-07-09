@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { Download, RefreshCw } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import Pagination from "../../../components/Pagination";
+import { DateRangeFilter, SortToggle, ScrollBody, rangeToParams, type DateRangeValue, type SortDir } from "../../../components/TableControls";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://gogobackend-production.up.railway.app";
 const PER_PAGE = 50;
@@ -27,6 +28,8 @@ export default function PaymentsPage() {
   const [payments,      setPayments]      = useState<any[]>([]);
   const [driverWallets, setDriverWallets] = useState<any[]>([]);
   const [tab,           setTab]           = useState<"trips"|"wallets"|"commission">("trips");
+  const [dateRange,     setDateRange]     = useState<DateRangeValue>({ range: "all_time" });
+  const [sortDir,       setSortDir]       = useState<SortDir>("desc");
   const [page,          setPage]          = useState(1);
 
   const token = () => typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
@@ -34,15 +37,15 @@ export default function PaymentsPage() {
   const fetchAll = async () => {
     const h = { Authorization: `Bearer ${token()}` };
     await Promise.all([
-      axios.get(`${API}/gogoo/payments`, { headers: h })
+      axios.get(`${API}/gogoo/payments`, { headers: h, params: { ...rangeToParams(dateRange), sort: sortDir } })
         .then(r => setPayments(r.data || [])).catch(() => {}),
       axios.get(`${API}/gogoo/admin/driver-payments`, { headers: h })
         .then(r => setDriverWallets(r.data?.drivers || [])).catch(() => {}),
     ]);
   };
 
-  useEffect(() => { fetchAll(); }, []);
-  useEffect(() => { setPage(1); }, [tab]);
+  useEffect(() => { fetchAll(); }, [dateRange, sortDir]);
+  useEffect(() => { setPage(1); }, [tab, dateRange, sortDir]);
 
   const completedPay   = payments.filter(p => p.status === "completed");
   const totalRevenue   = completedPay.reduce((s, p) => s + Number(p.platform_fee||0), 0);
@@ -99,25 +102,33 @@ export default function PaymentsPage() {
         </button>
       </div>
 
+      {(tab === "trips" || tab === "commission") && (
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
+          {tab === "trips" && <SortToggle value={sortDir} onChange={setSortDir} />}
+        </div>
+      )}
+
       {/* ── Trip Payments ── */}
       {tab === "trips" && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
+          <ScrollBody>
             <table className="w-full">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  {["Rider","Route","Amount","Platform Fee","Driver Earnings","Method","Status","Date"].map(h => (
+                  {["#","Rider","Route","Amount","Platform Fee","Driver Earnings","Method","Status","Date"].map(h => (
                     <th key={h} className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {payments.length === 0 ? (
-                  <tr><td colSpan={8} className="px-5 py-16 text-center text-gray-400">
+                  <tr><td colSpan={9} className="px-5 py-16 text-center text-gray-400">
                     <p className="text-3xl mb-2">💳</p><p className="text-sm">No payments yet</p>
                   </td></tr>
-                ) : (paged as any[]).map(p => (
+                ) : (paged as any[]).map((p, i) => (
                   <tr key={p.id} className="hover:bg-gray-50 transition">
+                    <td className="px-5 py-4 text-sm text-gray-400 font-medium">{(page - 1) * PER_PAGE + i + 1}</td>
                     <td className="px-5 py-4 text-sm font-medium text-gray-900">{p.rider_name}</td>
                     <td className="px-5 py-4 max-w-[130px]">
                       <p className="text-xs text-gray-600 truncate">{p.pickup_address}</p>
@@ -143,48 +154,35 @@ export default function PaymentsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
-          <div className="px-5 pb-2 pt-0" />
-          {/* NOTE: pagination uses payments.length since paged is already sliced */}
-          {payments.length > PER_PAGE && (
-            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
-              <p className="text-sm text-gray-400">
-                Showing {(page-1)*PER_PAGE+1}–{Math.min(page*PER_PAGE,payments.length)} of {payments.length}
-              </p>
-              <div className="flex gap-1">
-                <button disabled={page===1} onClick={() => setPage(p => p-1)}
-                  className="px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-lg disabled:opacity-30">← Prev</button>
-                <button disabled={page * PER_PAGE >= payments.length} onClick={() => setPage(p => p+1)}
-                  className="px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-lg disabled:opacity-30">Next →</button>
-              </div>
-            </div>
-          )}
+          </ScrollBody>
+          <Pagination page={page} total={payments.length} perPage={PER_PAGE} onChange={setPage} />
         </div>
       )}
 
       {/* ── Driver Wallets ── */}
       {tab === "wallets" && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
+          <ScrollBody>
             <table className="w-full">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  {["Driver","Vehicle","Wallet Balance","Gross Earnings","Commission","Rides","Reg Fee","Status"].map(h => (
+                  {["#","Driver","Vehicle","Wallet Balance","Gross Earnings","Commission","Rides","Reg Fee","Status"].map(h => (
                     <th key={h} className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {driverWallets.length === 0 ? (
-                  <tr><td colSpan={8} className="px-5 py-16 text-center text-gray-400 text-sm">No drivers yet</td></tr>
+                  <tr><td colSpan={9} className="px-5 py-16 text-center text-gray-400 text-sm">No drivers yet</td></tr>
                 ) : [...driverWallets]
                     .sort((a, b) => ((a.wallet_balance??-700) - (b.wallet_balance??-700)))
                     .slice((page-1)*PER_PAGE, page*PER_PAGE)
-                    .map(d => {
+                    .map((d, i) => {
                   const ws  = walletStatus(d);
                   const bal = d.wallet_balance ?? -700;
                   return (
                     <tr key={d.id} className="hover:bg-gray-50 transition">
+                      <td className="px-5 py-4 text-sm text-gray-400 font-medium">{(page - 1) * PER_PAGE + i + 1}</td>
                       <td className="px-5 py-4">
                         <p className="text-sm font-semibold text-gray-900">{d.name}</p>
                         <p className="text-xs text-gray-400">{d.email}</p>
@@ -211,7 +209,7 @@ export default function PaymentsPage() {
                 })}
               </tbody>
             </table>
-          </div>
+          </ScrollBody>
           <Pagination page={page} total={driverWallets.length} perPage={PER_PAGE} onChange={setPage} />
         </div>
       )}
@@ -269,20 +267,21 @@ export default function PaymentsPage() {
             <div className="px-6 py-4 border-b border-gray-100">
               <h3 className="text-base font-bold text-gray-900">All Completed Payments</h3>
             </div>
-            <div className="overflow-x-auto">
+            <ScrollBody>
               <table className="w-full">
-                <thead>
+                <thead className="sticky top-0 z-10">
                   <tr className="bg-gray-50 border-b border-gray-100">
-                    {["Date","Rider","Service","Amount","Platform Fee","Driver Earnings"].map(h => (
+                    {["#","Date","Rider","Service","Amount","Platform Fee","Driver Earnings"].map(h => (
                       <th key={h} className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {completedPay.length === 0 ? (
-                    <tr><td colSpan={6} className="px-5 py-10 text-center text-gray-400 text-sm">No completed payments</td></tr>
-                  ) : completedPay.slice((page-1)*PER_PAGE, page*PER_PAGE).map(p => (
+                    <tr><td colSpan={7} className="px-5 py-10 text-center text-gray-400 text-sm">No completed payments</td></tr>
+                  ) : completedPay.slice((page-1)*PER_PAGE, page*PER_PAGE).map((p, i) => (
                     <tr key={p.id} className="hover:bg-gray-50">
+                      <td className="px-5 py-3.5 text-sm text-gray-400 font-medium">{(page - 1) * PER_PAGE + i + 1}</td>
                       <td className="px-5 py-3.5 text-xs text-gray-400">
                         {new Date(p.created_at).toLocaleString("en-IN",{dateStyle:"short",timeStyle:"short"})}
                       </td>
@@ -295,7 +294,7 @@ export default function PaymentsPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ScrollBody>
             <Pagination page={page} total={completedPay.length} perPage={PER_PAGE} onChange={setPage} />
           </div>
         </div>

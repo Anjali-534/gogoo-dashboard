@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { Search, Download, X, CheckCircle, Ban, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import Pagination from "../../../components/Pagination";
+import { DateRangeFilter, SortToggle, ScrollBody, rangeToParams, type DateRangeValue, type SortDir } from "../../../components/TableControls";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://gogobackend-production.up.railway.app";
 const PER_PAGE = 50;
@@ -37,6 +38,8 @@ export default function DriversPage() {
   const [search,      setSearch]      = useState("");
   const [ratingF,     setRatingF]     = useState("all");
   const [walletF,     setWalletF]     = useState("all");
+  const [dateRange,   setDateRange]   = useState<DateRangeValue>({ range: "all_time" });
+  const [sortDir,     setSortDir]     = useState<SortDir>("desc");
   const [page,        setPage]        = useState(1);
   const [blockModal,  setBlockModal]  = useState<any | null>(null);
   const [blockReason, setBlockReason] = useState("");
@@ -49,6 +52,7 @@ export default function DriversPage() {
     try {
       const res = await axios.get(`${API}/gogoo/drivers`, {
         headers: { Authorization: `Bearer ${token()}` },
+        params: { ...rangeToParams(dateRange), sort: sortDir },
       });
       const data = res.data;
       const arr = Array.isArray(data) ? data : (data?.drivers || data?.data || []);
@@ -57,10 +61,10 @@ export default function DriversPage() {
       console.error("Failed to fetch drivers:", e?.response?.data || e?.message);
       setDrivers([]);
     }
-  }, []);
+  }, [dateRange, sortDir]);
 
   useEffect(() => { fetchDrivers(); }, [fetchDrivers]);
-  useEffect(() => { setPage(1); }, [tab, search, ratingF, walletF]);
+  useEffect(() => { setPage(1); }, [tab, search, ratingF, walletF, dateRange, sortDir]);
 
   const DOC_STATUS_BADGE: Record<string, string> = {
     verified:   "bg-green-100 text-green-700",
@@ -228,6 +232,8 @@ export default function DriversPage() {
             <option value="low">Low balance</option>
             <option value="healthy">Healthy balance</option>
           </select>
+
+          <SortToggle value={sortDir} onChange={setSortDir} />
         </div>
 
         <div className="flex items-center gap-2">
@@ -240,6 +246,9 @@ export default function DriversPage() {
           </button>
         </div>
       </div>
+
+      {/* ── Date range filter ── */}
+      <DateRangeFilter value={dateRange} onChange={setDateRange} />
 
       {/* ── Blocked banner ── */}
       {tab !== "blocked" && blockedCount > 0 && (
@@ -257,11 +266,11 @@ export default function DriversPage() {
 
       {/* ── Table ── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <ScrollBody>
           <table className="w-full">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="bg-gray-50 border-b border-gray-100">
-                {["Driver","Vehicle","Category","Rides","Rating","Wallet","Documents","Status","Actions"].map(h => (
+                {["#","Driver","Vehicle","Category","Rides","Rating","Wallet","Documents","Status","Actions"].map(h => (
                   <th key={h} className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -269,17 +278,18 @@ export default function DriversPage() {
             <tbody className="divide-y divide-gray-50">
               {paged.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-5 py-16 text-center">
+                  <td colSpan={10} className="px-5 py-16 text-center">
                     <div className="text-4xl mb-3">🚗</div>
                     <p className="text-base font-semibold text-gray-900 mb-1">No drivers found</p>
                     <p className="text-sm text-gray-400">Try adjusting filters</p>
                   </td>
                 </tr>
-              ) : paged.map(d => {
+              ) : paged.map((d, i) => {
                 const blocked = isBlocked(d);
                 const balance = d.wallet_balance ?? -700;
                 return (
                   <tr key={d.id} className="hover:bg-gray-50 transition">
+                    <td className="px-5 py-4 text-sm text-gray-400 font-medium">{(page - 1) * PER_PAGE + i + 1}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ${blocked ? "bg-red-500" : "bg-orange-500"}`}>
@@ -356,7 +366,7 @@ export default function DriversPage() {
               })}
             </tbody>
           </table>
-        </div>
+        </ScrollBody>
         <Pagination page={page} total={filtered.length} perPage={PER_PAGE} onChange={setPage} />
       </div>
 

@@ -4,6 +4,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { Search, Download, RefreshCw, X, Phone } from "lucide-react";
 import Pagination from "../../../components/Pagination";
+import { DateRangeFilter, SortToggle, ScrollBody, rangeToParams, type DateRangeValue, type SortDir } from "../../../components/TableControls";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://gogobackend-production.up.railway.app";
 const PER_PAGE = 50;
@@ -37,7 +38,8 @@ export default function BookingsPage() {
   const [loading,   setLoading]   = useState(true);
   const [filter,    setFilter]    = useState("all");
   const [search,    setSearch]    = useState("");
-  const [dateRange, setDateRange] = useState("all");
+  const [dateRange, setDateRange] = useState<DateRangeValue>({ range: "all_time" });
+  const [sortDir,   setSortDir]   = useState<SortDir>("desc");
   const [serviceF,  setServiceF]  = useState("all");
   const [page,      setPage]      = useState(1);
   const [selected,  setSelected]  = useState<any | null>(null);
@@ -46,13 +48,15 @@ export default function BookingsPage() {
 
   const fetchBookings = useCallback(async () => {
     setLoading(true);
-    const params = filter !== "all" ? `?status=${filter}` : "";
-    const res = await axios.get(`${API}/gogoo/bookings${params}`, {
+    const params: Record<string, string> = { ...rangeToParams(dateRange), sort: sortDir };
+    if (filter !== "all") params.status = filter;
+    const res = await axios.get(`${API}/gogoo/bookings`, {
       headers: { Authorization: `Bearer ${token()}` },
+      params,
     }).catch(() => ({ data: [] }));
     setBookings(res.data || []);
     setLoading(false);
-  }, [filter]);
+  }, [filter, dateRange, sortDir]);
 
   useEffect(() => {
     fetchBookings();
@@ -60,23 +64,7 @@ export default function BookingsPage() {
     return () => clearInterval(iv);
   }, [fetchBookings]);
 
-  useEffect(() => { setPage(1); }, [filter, search, dateRange, serviceF]);
-
-  const isInRange = (iso: string) => {
-    const d = new Date(iso);
-    const now = new Date();
-    if (dateRange === "today") {
-      return d.toDateString() === now.toDateString();
-    }
-    if (dateRange === "week") {
-      const diff = (now.getTime() - d.getTime()) / 86400000;
-      return diff <= 7;
-    }
-    if (dateRange === "month") {
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    }
-    return true;
-  };
+  useEffect(() => { setPage(1); }, [filter, search, dateRange, sortDir, serviceF]);
 
   const filtered = bookings.filter(b => {
     const q = search.toLowerCase();
@@ -86,7 +74,7 @@ export default function BookingsPage() {
       b.pickup_address?.toLowerCase().includes(q) ||
       b.drop_address?.toLowerCase().includes(q);
     const matchSvc = serviceF === "all" || (b.service_name || "").toLowerCase().includes(serviceF);
-    return matchQ && matchSvc && isInRange(b.created_at);
+    return matchQ && matchSvc;
   });
 
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -149,14 +137,7 @@ export default function BookingsPage() {
             )}
           </div>
 
-          {/* Date */}
-          <select value={dateRange} onChange={e => setDateRange(e.target.value)}
-            className="px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-400 text-gray-700">
-            <option value="all">All time</option>
-            <option value="today">Today</option>
-            <option value="week">Last 7 days</option>
-            <option value="month">This month</option>
-          </select>
+          <SortToggle value={sortDir} onChange={setSortDir} />
 
           {/* Service */}
           <select value={serviceF} onChange={e => setServiceF(e.target.value)}
@@ -177,15 +158,20 @@ export default function BookingsPage() {
             ))}
           </div>
         </div>
+
+        {/* ── Date range filter ── */}
+        <div className="mt-3">
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
+        </div>
       </div>
 
       {/* ── Table ── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <ScrollBody>
           <table className="w-full">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="bg-gray-50 border-b border-gray-100">
-                {["Booking ID","Rider","Driver","Service","Route","Fare","Status","Source","Date"].map(h => (
+                {["#","Booking ID","Rider","Driver","Service","Route","Fare","Status","Source","Date"].map(h => (
                   <th key={h} className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -194,7 +180,7 @@ export default function BookingsPage() {
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    {Array.from({ length: 9 }).map((_, j) => (
+                    {Array.from({ length: 10 }).map((_, j) => (
                       <td key={j} className="px-5 py-4">
                         <div className="h-3 bg-gray-100 rounded w-3/4" />
                       </td>
@@ -203,16 +189,17 @@ export default function BookingsPage() {
                 ))
               ) : paged.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-5 py-16 text-center">
+                  <td colSpan={10} className="px-5 py-16 text-center">
                     <div className="text-4xl mb-3">📭</div>
                     <p className="text-base font-semibold text-gray-900 mb-1">No bookings found</p>
                     <p className="text-sm text-gray-400">Try adjusting your filters</p>
                   </td>
                 </tr>
-              ) : paged.map(b => (
+              ) : paged.map((b, i) => (
                 <tr key={b.id}
                   className="hover:bg-orange-50/30 cursor-pointer transition"
                   onClick={() => setSelected(b)}>
+                  <td className="px-5 py-4 text-sm text-gray-400 font-medium">{(page - 1) * PER_PAGE + i + 1}</td>
                   <td className="px-5 py-4 text-xs font-mono text-gray-400">{b.id?.slice(0,8)}…</td>
                   <td className="px-5 py-4 text-sm font-medium text-gray-900">{b.rider_name || "—"}</td>
                   <td className="px-5 py-4 text-sm text-gray-600">{b.driver_name || "—"}</td>
@@ -239,7 +226,7 @@ export default function BookingsPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollBody>
         <Pagination page={page} total={filtered.length} perPage={PER_PAGE} onChange={setPage} />
       </div>
 

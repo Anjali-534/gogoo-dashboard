@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { Send, X, RefreshCw, Bell, Search, User } from "lucide-react";
+import { DateRangeFilter, SortToggle, ScrollBody, rangeToParams, type DateRangeValue, type SortDir } from "../../../components/TableControls";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://gogobackend-production.up.railway.app";
 
@@ -411,8 +412,10 @@ function BroadcastCard({ item, onDiscontinue }: { item: any; onDiscontinue: (id:
 }
 
 function BroadcastColumn({ audience }: { audience: "drivers"|"riders" }) {
-  const [items,   setItems]   = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [items,     setItems]     = useState<any[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [dateRange, setDateRange] = useState<DateRangeValue>({ range: "all_time" });
+  const [sortDir,   setSortDir]   = useState<SortDir>("desc");
   const meta = AUDIENCE_META[audience];
 
   const fetchItems = async () => {
@@ -421,6 +424,7 @@ function BroadcastColumn({ audience }: { audience: "drivers"|"riders" }) {
       const token = localStorage.getItem("access_token");
       const res = await axios.get(`${API}/gogoo/admin/notifications`, {
         headers: { Authorization: `Bearer ${token}` },
+        params: { ...rangeToParams(dateRange), sort: sortDir },
       });
       const all: any[] = res.data || [];
       setItems(all.filter(n => n.target_audience === audience || n.target_audience === "all"));
@@ -428,7 +432,7 @@ function BroadcastColumn({ audience }: { audience: "drivers"|"riders" }) {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchItems(); }, []);
+  useEffect(() => { fetchItems(); }, [dateRange, sortDir]);
 
   const discontinue = async (id: string) => {
     if (!confirm("Stop this broadcast? It will be hidden from the app.")) return;
@@ -463,6 +467,13 @@ function BroadcastColumn({ audience }: { audience: "drivers"|"riders" }) {
 
       <ComposeForm audience={audience} onSent={fetchItems} />
 
+      {!loading && items.length > 0 && (
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
+          <SortToggle value={sortDir} onChange={setSortDir} />
+        </div>
+      )}
+
       {loading ? (
         <div className="space-y-3">
           {Array.from({length:3}).map((_,i)=>(
@@ -476,7 +487,7 @@ function BroadcastColumn({ audience }: { audience: "drivers"|"riders" }) {
           <p className="text-xs text-gray-300 mt-1">Send your first message above</p>
         </div>
       ) : (
-        <>
+        <ScrollBody maxHeight="600px">
           {active.length > 0 && (
             <div>
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">Active</p>
@@ -489,7 +500,7 @@ function BroadcastColumn({ audience }: { audience: "drivers"|"riders" }) {
               {inactive.map(n => <BroadcastCard key={n.id} item={n} onDiscontinue={discontinue}/>)}
             </div>
           )}
-        </>
+        </ScrollBody>
       )}
     </div>
   );

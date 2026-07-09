@@ -4,6 +4,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { Search, Download, X, RefreshCw } from "lucide-react";
 import Pagination from "../../../components/Pagination";
+import { DateRangeFilter, SortToggle, ScrollBody, rangeToParams, type DateRangeValue, type SortDir } from "../../../components/TableControls";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://gogobackend-production.up.railway.app";
 const PER_PAGE = 50;
@@ -25,6 +26,8 @@ export default function RidersPage() {
   const [riders,        setRiders]        = useState<any[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [search,        setSearch]        = useState("");
+  const [dateRange,     setDateRange]     = useState<DateRangeValue>({ range: "all_time" });
+  const [sortDir,       setSortDir]       = useState<SortDir>("desc");
   const [page,          setPage]          = useState(1);
   const [selectedRider, setSelectedRider] = useState<any | null>(null);
   const [riderBookings, setRiderBookings] = useState<any[]>([]);
@@ -35,13 +38,14 @@ export default function RidersPage() {
   const fetchRiders = async () => {
     const res = await axios.get(`${API}/gogoo/riders`, {
       headers: { Authorization: `Bearer ${token()}` },
+      params: { ...rangeToParams(dateRange), sort: sortDir },
     }).catch(() => ({ data: [] }));
     setRiders(res.data || []);
     setLoading(false);
   };
 
-  useEffect(() => { fetchRiders(); }, []);
-  useEffect(() => { setPage(1); }, [search]);
+  useEffect(() => { fetchRiders(); }, [dateRange, sortDir]);
+  useEffect(() => { setPage(1); }, [search, dateRange, sortDir]);
 
   const openRider = async (r: any) => {
     setSelectedRider(r);
@@ -123,6 +127,7 @@ export default function RidersPage() {
           <button onClick={fetchRiders} className="p-2 hover:bg-gray-100 rounded-xl text-gray-400">
             <RefreshCw size={16} />
           </button>
+          <SortToggle value={sortDir} onChange={setSortDir} />
         </div>
         <button onClick={downloadXLSX}
           className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 transition">
@@ -130,13 +135,16 @@ export default function RidersPage() {
         </button>
       </div>
 
+      {/* ── Date range filter ── */}
+      <DateRangeFilter value={dateRange} onChange={setDateRange} />
+
       {/* ── Table ── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <ScrollBody>
           <table className="w-full">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="bg-gray-50 border-b border-gray-100">
-                {["Rider","Email","Phone","Total Rides","Rating","Joined","Actions"].map(h => (
+                {["#","Rider","Email","Phone","Total Rides","Rating","Joined","Actions"].map(h => (
                   <th key={h} className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -145,14 +153,14 @@ export default function RidersPage() {
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 8 }).map((_, j) => (
                       <td key={j} className="px-5 py-4"><div className="h-3 bg-gray-100 rounded w-3/4" /></td>
                     ))}
                   </tr>
                 ))
               ) : paged.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center">
+                  <td colSpan={8} className="px-5 py-16 text-center">
                     <p className="text-4xl mb-3">👤</p>
                     <p className="text-base font-semibold text-gray-900 mb-1">
                       {search ? "No riders match your search" : "No riders yet"}
@@ -160,8 +168,9 @@ export default function RidersPage() {
                     <p className="text-sm text-gray-400">Riders appear after signing up through the bogie app</p>
                   </td>
                 </tr>
-              ) : paged.map(r => (
+              ) : paged.map((r, i) => (
                 <tr key={r.id} className="hover:bg-gray-50 transition">
+                  <td className="px-5 py-4 text-sm text-gray-400 font-medium">{(page - 1) * PER_PAGE + i + 1}</td>
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-sm flex-shrink-0">
@@ -187,7 +196,7 @@ export default function RidersPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollBody>
         <Pagination page={page} total={filtered.length} perPage={PER_PAGE} onChange={setPage} />
       </div>
 
