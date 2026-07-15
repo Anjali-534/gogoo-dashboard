@@ -26,6 +26,11 @@ interface TrackerOrder {
   status: TrackerOrderStatus;
   public_tracking_token: string;
   created_at: string;
+  consignee_name: string | null;
+  material: string | null;
+  quantity: string | null;
+  dispatch_datetime: string | null;
+  documents_enclosed: string | null;
 }
 
 function fmtDate(iso: string) {
@@ -137,6 +142,14 @@ export default function TrackerOrderDetailPage() {
             <Field label="Driver Phone" value={order.driver_phone} />
             <Field label="Transporter" value={order.transporter_name} />
             <Field label="Transporter Phone" value={order.transporter_phone} />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-orange-500 uppercase tracking-wider mb-1">Dispatch Details</p>
+            <Field label="Consignee" value={order.consignee_name} />
+            <Field label="Material" value={order.material} />
+            <Field label="Quantity" value={order.quantity} />
+            <Field label="Dispatch Date & Time" value={order.dispatch_datetime ? fmtDate(order.dispatch_datetime) : null} />
+            <Field label="Documents Enclosed" value={order.documents_enclosed} />
           </div>
           <div>
             <p className="text-[11px] font-bold text-orange-500 uppercase tracking-wider mb-1">E-Way Bill</p>
