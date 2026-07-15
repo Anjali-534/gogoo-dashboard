@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Map, BookOpen, Car, Users,
   CreditCard, BarChart2, Bell, Settings,
   Shield, MessageSquare, Layers, LogOut,
-  Truck, ExternalLink, Headphones, Gift,
+  Truck, ExternalLink, Headphones, Gift, PackageSearch,
 } from "lucide-react";
 
 const NAV = [
@@ -20,6 +20,7 @@ const NAV = [
   { href: "/dashboard/analytics",     icon: BarChart2,       label: "Analytics" },
   { href: "/dashboard/notifications", icon: Bell,            label: "Notifications" },
   { href: "/dashboard/services",      icon: Layers,          label: "Services" },
+  { href: "/dashboard/tracker-companies", icon: PackageSearch, label: "Tracker Companies" },
   { href: "/dashboard/support",       icon: MessageSquare,   label: "Support" },
   { href: "/dashboard/audit",         icon: Shield,          label: "Audit Log" },
   { href: "/dashboard/settings",      icon: Settings,        label: "Settings" },
@@ -36,6 +37,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard/analytics":     "Analytics",
   "/dashboard/notifications": "Notifications",
   "/dashboard/services":      "Services",
+  "/dashboard/tracker-companies": "Tracker Companies",
   "/dashboard/support":       "Support",
   "/dashboard/audit":         "Audit Log",
   "/dashboard/settings":      "Settings",
@@ -59,6 +61,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const getTitle = () => {
     if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
     if (pathname.startsWith("/dashboard/drivers/")) return "Driver Detail";
+    if (pathname.startsWith("/dashboard/tracker-companies/")) return "Tracker Company Detail";
     return "Dashboard";
   };
 
