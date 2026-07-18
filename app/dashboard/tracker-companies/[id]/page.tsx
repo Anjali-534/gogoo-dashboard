@@ -4,7 +4,7 @@ import axios from "axios";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
-import { ArrowLeft, Phone, Mail, Check, X, Ban, RefreshCw } from "lucide-react";
+import { ArrowLeft, Phone, Mail, Check, X, Ban, RefreshCw, IndianRupee } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://gogobackend-production.up.railway.app";
 
@@ -43,6 +43,19 @@ interface TrackerOrder {
   created_at: string;
 }
 
+interface TrackerPlanOrder {
+  id: string;
+  plan: "single" | "2users" | "5users" | "mega" | "lifetime";
+  billing_duration: "monthly" | "quarterly" | "halfYearly" | "yearly" | "onetime";
+  base_amount: number;
+  gst_amount: number;
+  total_amount: number;
+  invoice_number: string | null;
+  status: "pending_payment" | "paid" | "cancelled";
+  created_at: string;
+  paid_at: string | null;
+}
+
 const STATUS_BADGE: Record<string, string> = {
   pending:   "bg-yellow-100 text-yellow-700",
   active:    "bg-green-100 text-green-700",
@@ -58,6 +71,24 @@ const ORDER_STATUS_BADGE: Record<string, string> = {
   cancelled:   "bg-red-100 text-red-600",
 };
 
+const PLAN_ORDER_STATUS_BADGE: Record<string, string> = {
+  pending_payment: "bg-yellow-100 text-yellow-700",
+  paid:            "bg-green-100 text-green-700",
+  cancelled:       "bg-red-100 text-red-600",
+};
+
+const PLAN_LABELS: Record<string, string> = {
+  single: "Single User", "2users": "2 Users", "5users": "5 Users", mega: "Mega", lifetime: "Lifetime",
+};
+
+const DURATION_LABELS: Record<string, string> = {
+  monthly: "Monthly", quarterly: "Quarterly", halfYearly: "Half-Yearly", yearly: "Yearly", onetime: "One-time",
+};
+
+function fmtINR(n: number) {
+  return `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
@@ -69,23 +100,29 @@ export default function TrackerCompanyDetailPage() {
   const [company, setCompany] = useState<TrackerCompany | null>(null);
   const [drivers, setDrivers] = useState<TrackerDriver[]>([]);
   const [orders,  setOrders]  = useState<TrackerOrder[]>([]);
+  const [planOrders, setPlanOrders] = useState<TrackerPlanOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirmAction, setConfirmAction] = useState<"approve" | "reject" | "suspend" | null>(null);
   const [busy, setBusy] = useState(false);
+  const [markPaidOrder, setMarkPaidOrder] = useState<TrackerPlanOrder | null>(null);
+  const [markPaidRef, setMarkPaidRef] = useState("");
+  const [markPaidBusy, setMarkPaidBusy] = useState(false);
 
   const token = () => (typeof window !== "undefined" ? localStorage.getItem("access_token") : "");
   const headers = { Authorization: `Bearer ${token()}` };
 
   const load = useCallback(async () => {
     try {
-      const [companyRes, driversRes, ordersRes] = await Promise.all([
+      const [companyRes, driversRes, ordersRes, planOrdersRes] = await Promise.all([
         axios.get(`${API}/gogoo/dashboard/tracker/companies/${id}`, { headers }),
         axios.get(`${API}/gogoo/dashboard/tracker/companies/${id}/drivers`, { headers }),
         axios.get(`${API}/gogoo/dashboard/tracker/companies/${id}/orders`, { headers }),
+        axios.get(`${API}/gogoo/dashboard/tracker/companies/${id}/plan-orders`, { headers }),
       ]);
       setCompany(companyRes.data || null);
       setDrivers(driversRes.data || []);
       setOrders(ordersRes.data || []);
+      setPlanOrders(planOrdersRes.data || []);
     } catch {
       toast.error("Failed to load company");
     } finally {
@@ -111,6 +148,27 @@ export default function TrackerCompanyDetailPage() {
       toast.error(msg || "Action failed");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function runMarkPaid() {
+    if (!markPaidOrder) return;
+    setMarkPaidBusy(true);
+    try {
+      await axios.post(
+        `${API}/gogoo/dashboard/tracker/plan-orders/${markPaidOrder.id}/mark-paid`,
+        markPaidRef.trim() ? { payment_gateway_ref: markPaidRef.trim() } : {},
+        { headers }
+      );
+      toast.success("Order marked paid — invoice emailed to company");
+      setMarkPaidOrder(null);
+      setMarkPaidRef("");
+      load();
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast.error(msg || "Failed to mark paid");
+    } finally {
+      setMarkPaidBusy(false);
     }
   }
 
@@ -203,6 +261,56 @@ export default function TrackerCompanyDetailPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* ── Plan Orders ── */}
+      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="text-base font-bold text-gray-900">Plan Orders</h3>
+          <p className="text-xs text-gray-400 mt-0.5">{planOrders.length} total</p>
+        </div>
+        {planOrders.length === 0 ? (
+          <div className="p-10 text-center text-gray-400">
+            <p className="text-3xl mb-2">💳</p>
+            <p className="text-sm">No plan orders yet</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {["Plan", "Duration", "Amount", "Status", "Invoice", "Created", ""].map(h => (
+                    <th key={h} className="px-5 py-3 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {planOrders.map(o => (
+                  <tr key={o.id} className="hover:bg-gray-50 transition">
+                    <td className="px-5 py-3 text-sm font-semibold text-gray-900">{PLAN_LABELS[o.plan] || o.plan}</td>
+                    <td className="px-5 py-3 text-sm text-gray-700">{DURATION_LABELS[o.billing_duration] || o.billing_duration}</td>
+                    <td className="px-5 py-3 text-sm text-gray-900">{fmtINR(o.total_amount)}</td>
+                    <td className="px-5 py-3">
+                      <span className={`text-[11px] font-bold px-2 py-1 rounded-full capitalize ${PLAN_ORDER_STATUS_BADGE[o.status]}`}>
+                        {o.status.replace("_", " ")}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-xs text-gray-500">{o.invoice_number || "—"}</td>
+                    <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">{fmtDate(o.created_at)}</td>
+                    <td className="px-5 py-3">
+                      {o.status === "pending_payment" && (
+                        <button onClick={() => { setMarkPaidOrder(o); setMarkPaidRef(""); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-green-50 text-green-600 border border-green-200 rounded-lg hover:bg-green-100 transition">
+                          <IndianRupee size={12} /> Mark paid
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* ── Drivers ── */}
@@ -331,6 +439,38 @@ export default function TrackerCompanyDetailPage() {
                   confirmAction === "reject"  ? "bg-red-500 hover:bg-red-600" : "bg-gray-500 hover:bg-gray-600"
                 }`}>
                 {busy ? "…" : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mark paid modal */}
+      {markPaidOrder && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 w-96 text-center">
+            <p className="text-4xl mb-3">💳</p>
+            <p className="font-bold text-gray-900 mb-2">
+              Mark {PLAN_LABELS[markPaidOrder.plan] || markPaidOrder.plan} ({DURATION_LABELS[markPaidOrder.billing_duration] || markPaidOrder.billing_duration}) paid?
+            </p>
+            <p className="text-sm text-gray-500 mb-4">
+              {fmtINR(markPaidOrder.total_amount)} — an invoice will be generated and emailed to the company.
+            </p>
+            <input
+              type="text"
+              value={markPaidRef}
+              onChange={e => setMarkPaidRef(e.target.value)}
+              placeholder="Payment reference (optional)"
+              className="w-full mb-6 px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-200"
+            />
+            <div className="flex gap-3">
+              <button onClick={() => { setMarkPaidOrder(null); setMarkPaidRef(""); }}
+                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={runMarkPaid} disabled={markPaidBusy}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-green-500 hover:bg-green-600 transition-colors disabled:opacity-50">
+                {markPaidBusy ? "…" : "Confirm"}
               </button>
             </div>
           </div>
