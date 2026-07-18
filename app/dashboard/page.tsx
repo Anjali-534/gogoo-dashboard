@@ -8,7 +8,7 @@ import {
 } from "recharts";
 import {
   Car, Users, BookOpen, TrendingUp, XCircle, CheckCircle,
-  Activity, Clock, RefreshCw, ArrowUpRight,
+  Activity, Clock, RefreshCw, ArrowUpRight, Building2, AlertTriangle, Wallet, Hourglass,
 } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://gogobackend-production.up.railway.app";
@@ -26,6 +26,10 @@ const fmtTime = (iso: string) => {
   if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
   return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+};
+
+const TRACKER_PLAN_LABEL: Record<string, string> = {
+  single: "Single User", "2users": "2 Users", "5users": "5 Users", mega: "Mega", lifetime: "Lifetime",
 };
 
 const STATUS_COLOR: Record<string, string> = {
@@ -74,6 +78,7 @@ export default function OverviewPage() {
   const [riders,   setRiders]   = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any>(null);
+  const [trackerOverview, setTrackerOverview] = useState<any>(null);
   const [loading, setLoading]   = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
@@ -82,18 +87,20 @@ export default function OverviewPage() {
   const fetchAll = useCallback(async () => {
     const h = { Authorization: `Bearer ${token()}` };
     try {
-      const [b, d, r, p, a] = await Promise.all([
+      const [b, d, r, p, a, t] = await Promise.all([
         axios.get(`${API}/gogoo/bookings`,  { headers: h }).catch(() => ({ data: [] })),
         axios.get(`${API}/gogoo/drivers`,   { headers: h }).catch(() => ({ data: [] })),
         axios.get(`${API}/gogoo/riders`,    { headers: h }).catch(() => ({ data: [] })),
         axios.get(`${API}/gogoo/payments`,  { headers: h }).catch(() => ({ data: [] })),
         axios.get(`${API}/gogoo/analytics`, { headers: h }).catch(() => ({ data: {} })),
+        axios.get(`${API}/gogoo/dashboard/tracker/overview`, { headers: h }).catch(() => ({ data: null })),
       ]);
       setBookings(b.data || []);
       setDrivers(d.data  || []);
       setRiders(r.data   || []);
       setPayments(p.data || []);
       setAnalytics(a.data);
+      setTrackerOverview(t.data);
       setLastRefresh(new Date());
     } finally {
       setLoading(false);
@@ -262,6 +269,44 @@ export default function OverviewPage() {
             <p className="text-xs text-gray-400 mt-1">{c.sub}</p>
           </div>
         ))}
+      </div>
+
+      {/* ── Row 2b: Bogie Tracker Overview ── */}
+      <div className="space-y-3">
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+          🚚 Bogie Tracker <span className="font-normal text-gray-400 normal-case tracking-normal">· logistics business</span>
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          {[
+            { label: "Active Companies", value: trackerOverview?.active_companies ?? 0, sub: "on Bogie Tracker", color: "text-orange-600", bg: "bg-orange-50", icon: Building2 },
+            { label: "Expiring in 7 Days", value: trackerOverview?.expiring_soon_7d ?? 0, sub: "subscription renewal due", color: "text-red-600", bg: "bg-red-50", icon: AlertTriangle },
+            { label: "Revenue This Month", value: fmtINR(Number(trackerOverview?.revenue_this_month ?? 0)), sub: "paid plan orders", color: "text-green-600", bg: "bg-green-50", icon: Wallet },
+            { label: "Pending Payment", value: trackerOverview?.pending_payment_orders ?? 0, sub: "awaiting staff mark-paid", color: "text-yellow-600", bg: "bg-yellow-50", icon: Hourglass },
+          ].map(c => (
+            <div key={c.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${c.bg}`}>
+                <c.icon size={18} className={c.color} />
+              </div>
+              <p className="text-3xl font-extrabold text-gray-900 mb-1">{c.value}</p>
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">{c.label}</p>
+              <p className="text-xs text-gray-400 mt-1">{c.sub}</p>
+            </div>
+          ))}
+
+          {/* Plan breakdown — compact list rather than a single number, since
+              this is a distribution across 5 plans, not one KPI. */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">Plan Breakdown</p>
+            <div className="space-y-2">
+              {Object.entries(TRACKER_PLAN_LABEL).map(([plan, label]) => (
+                <div key={plan} className="flex items-center justify-between text-xs">
+                  <span className="text-gray-600">{label}</span>
+                  <span className="font-bold text-gray-900">{trackerOverview?.plan_breakdown?.[plan] ?? 0}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── Row 3: App Analytics ── */}
