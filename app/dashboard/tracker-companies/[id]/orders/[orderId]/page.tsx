@@ -31,6 +31,7 @@ interface TrackerOrder {
   quantity: string | null;
   dispatch_datetime: string | null;
   documents_enclosed: string | null;
+  signature_url: string | null;
 }
 
 function fmtDate(iso: string) {
@@ -125,6 +126,19 @@ export default function TrackerOrderDetailPage() {
         <h3 className="text-base font-bold text-gray-900 mb-5">Tracking Timeline</h3>
         <TrackerStatusStepper status={order.status} events={events} />
       </div>
+
+      {/* ── Proof of Delivery ── */}
+      {order.signature_url && (
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+          <h3 className="text-base font-bold text-gray-900 mb-4">Proof of Delivery</h3>
+          {/* eslint-disable-next-line @next/next/no-img-element -- signature comes from Cloudinary/local uploads, not a next/image-configured domain */}
+          <img
+            src={order.signature_url.startsWith("http") ? order.signature_url : `${API}${order.signature_url}`}
+            alt="Delivery signature"
+            className="w-full max-w-md rounded-xl border border-gray-100 bg-gray-50"
+          />
+        </div>
+      )}
 
       {/* ── Order Details ── */}
       <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
