@@ -18,6 +18,7 @@ interface TrackerCompany {
   approved_by: string | null;
   approved_at: string | null;
   created_at: string;
+  license_key: string;
 }
 
 interface TrackerDriver {
@@ -155,12 +156,16 @@ export default function TrackerCompanyDetailPage() {
     if (!markPaidOrder) return;
     setMarkPaidBusy(true);
     try {
-      await axios.post(
+      const res = await axios.post<{ company_activated?: boolean }>(
         `${API}/gogoo/dashboard/tracker/plan-orders/${markPaidOrder.id}/mark-paid`,
         markPaidRef.trim() ? { payment_gateway_ref: markPaidRef.trim() } : {},
         { headers }
       );
-      toast.success("Order marked paid — invoice emailed to company");
+      toast.success(
+        res.data?.company_activated
+          ? "Order marked paid — company activated, license key & login emailed"
+          : "Order marked paid — invoice emailed to company"
+      );
       setMarkPaidOrder(null);
       setMarkPaidRef("");
       load();
@@ -221,6 +226,9 @@ export default function TrackerCompanyDetailPage() {
                 <span className="flex items-center gap-1.5"><Phone size={13} />{company.contact_phone}</span>
               </div>
               {company.gstin && <p className="text-sm text-gray-400 mt-1">GSTIN: {company.gstin}</p>}
+              {company.license_key && (
+                <p className="text-sm text-gray-400 mt-1 font-mono">License Key: {company.license_key}</p>
+              )}
             </div>
           </div>
           <div className="flex gap-2">
