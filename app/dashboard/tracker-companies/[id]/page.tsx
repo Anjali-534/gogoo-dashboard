@@ -156,16 +156,18 @@ export default function TrackerCompanyDetailPage() {
     if (!markPaidOrder) return;
     setMarkPaidBusy(true);
     try {
-      const res = await axios.post<{ company_activated?: boolean }>(
+      const res = await axios.post<{ company_activated?: boolean; first_activation?: boolean }>(
         `${API}/gogoo/dashboard/tracker/plan-orders/${markPaidOrder.id}/mark-paid`,
         markPaidRef.trim() ? { payment_gateway_ref: markPaidRef.trim() } : {},
         { headers }
       );
-      toast.success(
-        res.data?.company_activated
+      let successMsg = "Order marked paid — invoice emailed to company";
+      if (res.data?.company_activated) {
+        successMsg = res.data?.first_activation
           ? "Order marked paid — company activated, license key & login emailed"
-          : "Order marked paid — invoice emailed to company"
-      );
+          : "Order marked paid — subscription reactivated, existing login restored";
+      }
+      toast.success(successMsg);
       setMarkPaidOrder(null);
       setMarkPaidRef("");
       load();
